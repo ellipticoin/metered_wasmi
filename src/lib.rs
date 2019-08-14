@@ -76,7 +76,9 @@
 //!     let instance =
 //!         ModuleInstance::new(
 //!             &module,
-//!             &ImportsBuilder::default()
+//!             &ImportsBuilder::default(),
+//!             None,
+//!             &|_, _| 0
 //!         )
 //!         .expect("failed to instantiate wasm module")
 //!         .assert_no_start();
@@ -88,7 +90,7 @@
 //!             "test",
 //!             &[],
 //!             &mut NopExternals,
-//!         ).expect("failed to execute export"),
+//!         ).0.expect("failed to execute export"),
 //!         Some(RuntimeValue::I32(1337)),
 //!     );
 //! }
@@ -387,7 +389,7 @@ mod func;
 mod global;
 mod host;
 mod imports;
-mod isa;
+pub mod isa;
 mod memory;
 mod module;
 pub mod nan_preserving_float;
@@ -406,7 +408,7 @@ pub use self::host::{Externals, HostError, NopExternals, RuntimeArgs};
 pub use self::imports::{ImportResolver, ImportsBuilder, ModuleImportResolver};
 pub use self::memory::{MemoryInstance, MemoryRef, LINEAR_MEMORY_PAGE_SIZE};
 pub use self::module::{ExternVal, ModuleInstance, ModuleRef, NotStartedModuleRef};
-pub use self::runner::{StackRecycler, DEFAULT_CALL_STACK_LIMIT, DEFAULT_VALUE_STACK_LIMIT};
+pub use self::runner::{FunctionContext, StackRecycler, DEFAULT_CALL_STACK_LIMIT, DEFAULT_VALUE_STACK_LIMIT};
 pub use self::table::{TableInstance, TableRef};
 pub use self::types::{GlobalDescriptor, MemoryDescriptor, Signature, TableDescriptor, ValueType};
 pub use self::value::{Error as ValueError, FromRuntimeValue, LittleEndianConvert, RuntimeValue};

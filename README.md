@@ -1,3 +1,14 @@
+### Forked from: [https://github.com/paritytech/wasmi](https://github.com/paritytech/wasmi)
+
+_This is a fork of the [Wasmi crate](https://crates.io/crates/wasmi) by
+[Parity](https://www.parity.io/) with the addition of built in gas metering._
+
+Upstream changes will be included periodically.
+
+See [examples/interpret.rs](https://github.com/ellipticoin/metered_wasmi/blob/master/examples/interpret.rs) for an example of running the interpreter with gas metering enabled.
+
+
+
 [![crates.io link](https://img.shields.io/crates/v/wasmi.svg)](https://crates.io/crates/wasmi)
 [![Build Status](https://travis-ci.org/paritytech/wasmi.svg?branch=master)](https://travis-ci.org/paritytech/wasmi)
 

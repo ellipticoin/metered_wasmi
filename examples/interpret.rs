@@ -4,7 +4,8 @@ extern crate wasmi;
 
 use std::env::args;
 use std::fs::File;
-use wasmi::{ImportsBuilder, Module, ModuleInstance, NopExternals, RuntimeValue};
+use wasmi::{ImportsBuilder, Module, ModuleInstance, NopExternals, RuntimeValue, FunctionContext, isa};
+use wasmi::isa::Instruction::*;
 
 fn load_from_file(filename: &str) -> Module {
     use std::io::prelude::*;
@@ -12,6 +13,10 @@ fn load_from_file(filename: &str) -> Module {
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).unwrap();
     Module::from_buffer(buf).unwrap()
+}
+
+fn gas_cost_fn(instruction: &isa::Instruction, function_context: &FunctionContext) -> u32 {
+    1
 }
 
 fn main() {
@@ -31,7 +36,8 @@ fn main() {
     // - a module declaration
     // - "main" module doesn't import native module(s) this is why we don't need to provide external native modules here
     // This test shows how to implement native module https://github.com/NikVolf/parity-wasm/blob/master/src/interpreter/tests/basics.rs#L197
-    let main = ModuleInstance::new(&module, &ImportsBuilder::default())
+    let gas_limit = 10000;
+    let main = ModuleInstance::new(&module, &ImportsBuilder::default(), Some(gas_limit), &gas_cost_fn)
         .expect("Failed to instantiate module")
         .run_start(&mut NopExternals)
         .expect("Failed to run start function in module");
@@ -39,9 +45,11 @@ fn main() {
     // The argument should be parsable as a valid integer
     let argument: i32 = args[2].parse().expect("Integer argument required");
 
+    let (result, gas_left) = main.invoke_export("_call", &[RuntimeValue::I32(argument)], &mut NopExternals);
     // "_call" export of function to be executed with an i32 argument and prints the result of execution
     println!(
-        "Result: {:?}",
-        main.invoke_export("_call", &[RuntimeValue::I32(argument)], &mut NopExternals)
+        "Result: {:?}\nGas Used: {:?}",
+        result,
+        gas_limit - gas_left.unwrap_or(0)
     );
 }

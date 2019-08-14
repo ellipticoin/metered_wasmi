@@ -166,6 +166,8 @@ enum RunResult {
 pub struct Interpreter {
     value_stack: ValueStack,
     call_stack: CallStack,
+    gas_left: Option<u32>,
+    gas_cost_fn: &'static Fn(&isa::Instruction, &FunctionContext) -> u32,
     return_type: Option<ValueType>,
     state: InterpreterState,
 }
@@ -175,6 +177,8 @@ impl Interpreter {
         func: &FuncRef,
         args: &[RuntimeValue],
         mut stack_recycler: Option<&mut StackRecycler>,
+        gas_limit: Option<u32>,
+        gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32,
     ) -> Result<Interpreter, Trap> {
         let mut value_stack = StackRecycler::recreate_value_stack(&mut stack_recycler);
         for &arg in args {
@@ -197,6 +201,8 @@ impl Interpreter {
             call_stack,
             return_type,
             state: InterpreterState::Initialized,
+            gas_left: gas_limit,
+            gas_cost_fn,
         })
     }
 
@@ -207,12 +213,15 @@ impl Interpreter {
     pub fn start_execution<'a, E: Externals + 'a>(
         &mut self,
         externals: &'a mut E,
-    ) -> Result<Option<RuntimeValue>, Trap> {
+    ) -> (Result<Option<RuntimeValue>, Trap>, Option<u32>) {
         // Ensure that the VM has not been executed. This is checked in `FuncInvocation::start_execution`.
         assert!(self.state == InterpreterState::Initialized);
 
         self.state = InterpreterState::Started;
-        self.run_interpreter_loop(externals)?;
+        match self.run_interpreter_loop(externals).0 {
+            Ok(()) => {},
+            Err(e) => return (Err(e.into()), self.gas_left),
+        };
 
         let opt_return_value = self
             .return_type
@@ -221,7 +230,7 @@ impl Interpreter {
         // Ensure that stack is empty after the execution. This is guaranteed by the validation properties.
         assert!(self.value_stack.len() == 0);
 
-        Ok(opt_return_value)
+        (Ok(opt_return_value), self.gas_left)
     }
 
     pub fn resume_execution<'a, E: Externals + 'a>(
@@ -243,7 +252,7 @@ impl Interpreter {
                 .map_err(Trap::new)?;
         }
 
-        self.run_interpreter_loop(externals)?;
+        self.run_interpreter_loop(externals).0.unwrap();
 
         let opt_return_value = self
             .return_type
@@ -258,7 +267,7 @@ impl Interpreter {
     fn run_interpreter_loop<'a, E: Externals + 'a>(
         &mut self,
         externals: &'a mut E,
-    ) -> Result<(), Trap> {
+    ) -> (Result<(), Trap>, Option<u32>) {
         loop {
             let mut function_context = self.call_stack.pop().expect(
                 "on loop entry - not empty; on loop continue - checking for emptiness; qed",
@@ -272,24 +281,31 @@ impl Interpreter {
 
             if !function_context.is_initialized() {
                 // Initialize stack frame for the function call.
-                function_context.initialize(&function_body.locals, &mut self.value_stack)?;
+                match function_context.initialize(&function_body.locals, &mut self.value_stack) {
+                    Ok(()) => {},
+                    Err(e) => return (Err(e.into()), self.gas_left),
+
+                };
             }
 
-            let function_return = self
+            let function_return = match self
                 .do_run_function(&mut function_context, &function_body.code)
-                .map_err(Trap::new)?;
+                .map_err(Trap::new) {
+                    Ok(function_return) => function_return,
+                    Err(e) => return (Err(e.into()), self.gas_left),
+                };
 
             match function_return {
                 RunResult::Return => {
                     if self.call_stack.is_empty() {
                         // This was the last frame in the call stack. This means we
                         // are done executing.
-                        return Ok(());
+                        return (Ok(()), self.gas_left);
                     }
                 }
                 RunResult::NestedCall(nested_func) => {
                     if self.call_stack.is_full() {
-                        return Err(TrapKind::StackOverflow.into());
+                        return (Err(TrapKind::StackOverflow.into()), self.gas_left);
                     }
 
                     match *nested_func.as_internal() {
@@ -304,15 +320,15 @@ impl Interpreter {
                             self.call_stack.push(function_context);
 
                             let return_val =
-                                match FuncInstance::invoke(&nested_func, &args, externals) {
-                                    Ok(val) => val,
-                                    Err(trap) => {
+                                match FuncInstance::invoke(&nested_func, &args, externals, None, &(|_,_| 0)) {
+                                    (Ok(val), _gas_left) => val,
+                                    (Err(trap), _gas_left) => {
                                         if trap.kind().is_host() {
                                             self.state = InterpreterState::Resumable(
                                                 nested_func.signature().return_type(),
                                             );
                                         }
-                                        return Err(trap);
+                                        return (Err(trap), self.gas_left);
                                     }
                                 };
 
@@ -320,13 +336,16 @@ impl Interpreter {
                             let value_ty = return_val.as_ref().map(|val| val.value_type());
                             let expected_ty = nested_func.signature().return_type();
                             if value_ty != expected_ty {
-                                return Err(TrapKind::UnexpectedSignature.into());
+                                return (Err(TrapKind::UnexpectedSignature.into()), self.gas_left);
                             }
 
                             if let Some(return_val) = return_val {
-                                self.value_stack
+                                match self.value_stack
                                     .push(return_val.into())
-                                    .map_err(Trap::new)?;
+                                    .map_err(Trap::new) {
+                                        Ok(()) => {},
+                                        Err(e) => return (Err(e.into()), self.gas_left),
+                                    };
                             }
                         }
                     }
@@ -348,6 +367,11 @@ impl Interpreter {
                  since validation ensures that we either have an explicit \
                  return or an implicit block `end`.",
             );
+
+            self.gas_left = self.gas_left.map(|gas_left| {
+                let gas_cost_fn = &self.gas_cost_fn;
+                gas_left - gas_cost_fn(&instruction, function_context)
+            });
 
             match self.run_instruction(function_context, &instruction)? {
                 InstructionOutcome::RunNextInstruction => {}
@@ -1250,7 +1274,7 @@ impl Interpreter {
 }
 
 /// Function execution context.
-struct FunctionContext {
+pub struct FunctionContext {
     /// Is context initialized.
     pub is_initialized: bool,
     /// Internal function reference.
@@ -1359,7 +1383,7 @@ pub fn check_function_args(signature: &Signature, args: &[RuntimeValue]) -> Resu
 }
 
 #[derive(Debug)]
-struct ValueStack {
+pub struct ValueStack {
     buf: Box<[RuntimeValueInternal]>,
     /// Index of the first free place in the stack.
     sp: usize,

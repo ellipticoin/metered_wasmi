@@ -264,7 +264,7 @@ fn try_load_module(wasm: &[u8]) -> Result<Module, Error> {
 
 fn try_load(wasm: &[u8], spec_driver: &mut SpecDriver) -> Result<(), Error> {
     let module = try_load_module(wasm)?;
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::default())?;
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::default(), None, &|_, _| 0)?;
     instance
         .run_start(spec_driver.spec_module())
         .map_err(|trap| Error::Start(trap))?;
@@ -277,7 +277,7 @@ fn load_module(
     spec_driver: &mut SpecDriver,
 ) -> Result<ModuleRef, Error> {
     let module = try_load_module(wasm)?;
-    let instance = ModuleInstance::new(&module, spec_driver)
+    let instance = ModuleInstance::new(&module, spec_driver, None, &|_, _| 0)
         .map_err(|e| Error::Load(e.to_string()))?
         .run_start(spec_driver.spec_module())
         .map_err(|trap| Error::Start(trap))?;
@@ -309,7 +309,7 @@ fn run_action(
                 .cloned()
                 .map(spec_to_runtime_value)
                 .collect::<Vec<_>>();
-            module.invoke_export(field, &vec_args, program.spec_module())
+            module.invoke_export(field, &vec_args, program.spec_module()).0
         }
         Action::Get {
             ref module,
