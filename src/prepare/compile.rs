@@ -251,14 +251,13 @@ impl Compiler {
                 );
                 self.sink.emit_br_nez(target);
             }
-            BrTable(ref br_table_data) => {
+            BrTable(ref table, default) => {
                 // At this point, the condition value is at the top of the stack.
                 // But at the point of actual jump the condition will already be
                 // popped off.
                 let value_stack_height = context.value_stack.len().saturating_sub(1);
 
-                let targets = br_table_data
-                    .table
+                let targets = table
                     .iter()
                     .map(|depth| {
                         require_target(
@@ -270,7 +269,7 @@ impl Compiler {
                     })
                     .collect::<Result<Vec<_>, _>>();
                 let default_target = require_target(
-                    br_table_data.default,
+                    default,
                     value_stack_height,
                     &context.frame_stack,
                     &self.label_stack,
