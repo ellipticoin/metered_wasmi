@@ -1,4 +1,4 @@
-//! # wasmi
+//! # metered_wasmi
 //!
 //! This library allows WebAssembly modules to be loaded in binary format and their functions invoked.
 //!
@@ -48,10 +48,10 @@
 //! # Examples
 //!
 //! ```rust
-//! extern crate wasmi;
+//! extern crate metered_wasmi;
 //! extern crate wabt;
 //!
-//! use wasmi::{ModuleInstance, ImportsBuilder, NopExternals, RuntimeValue};
+//! use metered_wasmi::{ModuleInstance, ImportsBuilder, NopExternals, RuntimeValue};
 //!
 //! fn main() {
 //!     // Parse WAT (WebAssembly Text format) into wasm bytecode.
@@ -68,7 +68,7 @@
 //!         .expect("failed to parse wat");
 //!
 //!     // Load wasm binary and prepare it for instantiation.
-//!     let module = wasmi::Module::from_buffer(&wasm_binary)
+//!     let module = metered_wasmi::Module::from_buffer(&wasm_binary)
 //!         .expect("failed to load wasm");
 //!
 //!     // Instantiate a module with empty imports and
@@ -438,7 +438,7 @@ impl Module {
     ///
     /// ```rust
     /// extern crate parity_wasm;
-    /// extern crate wasmi;
+    /// extern crate metered_wasmi;
     ///
     /// use parity_wasm::builder;
     /// use parity_wasm::elements;
@@ -452,7 +452,7 @@ impl Module {
     ///             .build()
     ///         .build();
     ///
-    ///     let module = wasmi::Module::from_parity_wasm_module(parity_module)
+    ///     let module = metered_wasmi::Module::from_parity_wasm_module(parity_module)
     ///         .expect("parity-wasm builder generated invalid module!");
     ///
     ///     // Instantiate `module`, etc...
@@ -473,7 +473,7 @@ impl Module {
     /// # Examples
     ///
     /// ```rust
-    /// # extern crate wasmi;
+    /// # extern crate metered_wasmi;
     /// # extern crate wabt;
     ///
     /// let wasm_binary: Vec<u8> =
@@ -489,7 +489,7 @@ impl Module {
     ///     .expect("failed to parse wat");
     ///
     /// // Load wasm binary and prepare it for instantiation.
-    /// let module = wasmi::Module::from_buffer(&wasm_binary).expect("Parsing failed");
+    /// let module = metered_wasmi::Module::from_buffer(&wasm_binary).expect("Parsing failed");
     /// assert!(module.deny_floating_point().is_ok());
     ///
     /// let wasm_binary: Vec<u8> =
@@ -504,7 +504,7 @@ impl Module {
     ///     )
     ///     .expect("failed to parse wat");
     ///
-    /// let module = wasmi::Module::from_buffer(&wasm_binary).expect("Parsing failed");
+    /// let module = metered_wasmi::Module::from_buffer(&wasm_binary).expect("Parsing failed");
     /// assert!(module.deny_floating_point().is_err());
     ///
     /// let wasm_binary: Vec<u8> =
@@ -517,7 +517,7 @@ impl Module {
     ///     )
     ///     .expect("failed to parse wat");
     ///
-    /// let module = wasmi::Module::from_buffer(&wasm_binary).expect("Parsing failed");
+    /// let module = metered_wasmi::Module::from_buffer(&wasm_binary).expect("Parsing failed");
     /// assert!(module.deny_floating_point().is_err());
     /// ```
     pub fn deny_floating_point(&self) -> Result<(), Error> {
@@ -536,11 +536,11 @@ impl Module {
     /// # Examples
     ///
     /// ```rust
-    /// extern crate wasmi;
+    /// extern crate metered_wasmi;
     ///
     /// fn main() {
     ///     let module =
-    ///         wasmi::Module::from_buffer(
+    ///         metered_wasmi::Module::from_buffer(
     ///             // Minimal module:
     ///             //   \0asm - magic
     ///             //    0x01 - version (in little-endian)

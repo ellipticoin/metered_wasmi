@@ -180,8 +180,8 @@ impl MemoryInstance {
     /// To convert number of pages to number of bytes you can use the following code:
     ///
     /// ```rust
-    /// use wasmi::MemoryInstance;
-    /// use wasmi::memory_units::*;
+    /// use metered_wasmi::MemoryInstance;
+    /// use metered_wasmi::memory_units::*;
     ///
     /// let memory = MemoryInstance::alloc(Pages(1), None).unwrap();
     /// let byte_size: Bytes = memory.current_size().into();

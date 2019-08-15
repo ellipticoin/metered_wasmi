@@ -509,9 +509,9 @@ impl ModuleInstance {
     /// # Examples
     ///
     /// ```rust
-    /// use wasmi::{ModuleInstance, ImportsBuilder, NopExternals};
-    /// # fn func() -> Result<(), ::wasmi::Error> {
-    /// # let module = wasmi::Module::from_buffer(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]).unwrap();
+    /// use metered_wasmi::{ModuleInstance, ImportsBuilder, NopExternals};
+    /// # fn func() -> Result<(), ::metered_wasmi::Error> {
+    /// # let module = metered_wasmi::Module::from_buffer(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]).unwrap();
     ///
     /// // ModuleInstance::new returns instance which `start` function isn't called.
     /// let not_started = match ModuleInstance::new(
@@ -534,9 +534,9 @@ impl ModuleInstance {
     /// instantiated module without calling `start` function.
     ///
     /// ```rust
-    /// use wasmi::{ModuleInstance, ImportsBuilder, NopExternals};
-    /// # fn func() -> Result<(), ::wasmi::Error> {
-    /// # let module = wasmi::Module::from_buffer(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]).unwrap();
+    /// use metered_wasmi::{ModuleInstance, ImportsBuilder, NopExternals};
+    /// # fn func() -> Result<(), ::metered_wasmi::Error> {
+    /// # let module = metered_wasmi::Module::from_buffer(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]).unwrap();
     ///
     /// // This will panic if the module actually contain `start` function.
     /// let not_started = match ModuleInstance::new(
@@ -622,9 +622,9 @@ impl ModuleInstance {
     /// Invoke a function that takes two numbers and returns sum of them.
     ///
     /// ```rust
-    /// # extern crate wasmi;
+    /// # extern crate metered_wasmi;
     /// # extern crate wabt;
-    /// # use wasmi::{ModuleInstance, ImportsBuilder, NopExternals, RuntimeValue};
+    /// # use metered_wasmi::{ModuleInstance, ImportsBuilder, NopExternals, RuntimeValue};
     /// # fn main() {
     /// # let wasm_binary: Vec<u8> = wabt::wat2wasm(
     /// #   r#"
@@ -637,7 +637,7 @@ impl ModuleInstance {
     /// #   )
     /// #   "#,
     /// # ).expect("failed to parse wat");
-    /// # let module = wasmi::Module::from_buffer(&wasm_binary).expect("failed to load wasm");
+    /// # let module = metered_wasmi::Module::from_buffer(&wasm_binary).expect("failed to load wasm");
     /// # let instance = ModuleInstance::new(
     /// # &module,
     /// # &ImportsBuilder::default(),

@@ -79,7 +79,7 @@ impl<'a> RuntimeArgs<'a> {
 ///
 /// ```rust
 /// use std::fmt;
-/// use wasmi::{Error, HostError};
+/// use metered_wasmi::{Error, HostError};
 ///
 /// #[derive(Debug)]
 /// struct MyError {
@@ -140,7 +140,7 @@ impl dyn HostError {
 /// # Examples
 ///
 /// ```rust
-/// use wasmi::{
+/// use metered_wasmi::{
 ///     Externals, RuntimeValue, RuntimeArgs, Error, ModuleImportResolver,
 ///     FuncRef, ValueType, Signature, FuncInstance, Trap,
 /// };

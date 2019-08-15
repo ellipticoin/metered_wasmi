@@ -1,12 +1,12 @@
 //! Handy utility to test whether the given module deserializes,
 //! validates and instantiates successfully.
 
-extern crate wasmi;
+extern crate metered_wasmi;
 
 use std::env::args;
 use std::fs::File;
-use wasmi::memory_units::*;
-use wasmi::{
+use metered_wasmi::memory_units::*;
+use metered_wasmi::{
     Error, FuncInstance, FuncRef, GlobalDescriptor, GlobalInstance, GlobalRef, ImportsBuilder,
     MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleImportResolver, ModuleInstance,
     NopExternals, RuntimeValue, Signature, TableDescriptor, TableInstance, TableRef,

@@ -1,11 +1,11 @@
 // In this example we execute a contract funciton exported as "_call"
 
-extern crate wasmi;
+extern crate metered_wasmi;
 
 use std::env::args;
 use std::fs::File;
-use wasmi::{ImportsBuilder, Module, ModuleInstance, NopExternals, RuntimeValue, FunctionContext, isa};
-use wasmi::isa::Instruction::*;
+use metered_wasmi::{ImportsBuilder, Module, ModuleInstance, NopExternals, RuntimeValue, FunctionContext, isa};
+use metered_wasmi::isa::Instruction::*;
 
 fn load_from_file(filename: &str) -> Module {
     use std::io::prelude::*;

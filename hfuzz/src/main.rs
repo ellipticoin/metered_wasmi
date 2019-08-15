@@ -1,7 +1,7 @@
 #[macro_use] extern crate honggfuzz;
 
 extern crate wabt;
-extern crate wasmi;
+extern crate metered_wasmi;
 extern crate tempdir;
 
 use std::fs::File;
@@ -46,8 +46,8 @@ fn run_spec(data: &[u8], stdout_msg_buf: &mut [u8; 64], stderr_msg_buf: &mut [u8
 	}
 }
 
-fn run_wasmi(data: &[u8]) -> Result<(), ()> {
-	let _ = wasmi::Module::from_buffer(data).map_err(|_| ())?;
+fn run_metered_wasmi(data: &[u8]) -> Result<(), ()> {
+	let _ = metered_wasmi::Module::from_buffer(data).map_err(|_| ())?;
 	Ok(())
 }
 
@@ -59,10 +59,10 @@ fn main() {
 			let mut stdout_msg_buf: [u8; 64] = [0; 64];
 			let mut stderr_msg_buf: [u8; 64] = [0; 64];
 
-			let wasmi_result = run_wasmi(data);
+			let metered_wasmi_result = run_metered_wasmi(data);
 			let wasm_result = run_spec(data, &mut stdout_msg_buf, &mut stderr_msg_buf);
 
-			if wasmi_result.is_ok() != wasm_result.is_ok() {
+			if metered_wasmi_result.is_ok() != wasm_result.is_ok() {
 				panic!("stdout: {:?}, stderr: {:?}", &stdout_msg_buf[..], &stderr_msg_buf as &[u8]);
 			}
 		});

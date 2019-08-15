@@ -1,5 +1,5 @@
 //! Initially it supposed to be like [1]. However it turned out
-//! that executing this code in wasmi way too slow.
+//! that executing this code in metered_wasmi way too slow.
 //!
 //! [1]: https://benchmarksgame-team.pages.debian.net/benchmarksgame/program/regexredux-rust-2.html
 

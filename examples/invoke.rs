@@ -1,10 +1,10 @@
 extern crate parity_wasm;
-extern crate wasmi;
+extern crate metered_wasmi;
 
 use std::env::args;
 
 use parity_wasm::elements::{External, FunctionType, Internal, Type, ValueType};
-use wasmi::{ImportsBuilder, ModuleInstance, NopExternals, RuntimeValue};
+use metered_wasmi::{ImportsBuilder, ModuleInstance, NopExternals, RuntimeValue};
 
 fn main() {
     let args: Vec<_> = args().collect();
@@ -100,7 +100,7 @@ fn main() {
             .collect::<Vec<RuntimeValue>>()
     };
 
-    let loaded_module = wasmi::Module::from_parity_wasm_module(module).expect("Module to be valid");
+    let loaded_module = metered_wasmi::Module::from_parity_wasm_module(module).expect("Module to be valid");
 
     // Intialize deserialized module. It adds module into It expects 3 parameters:
     // - a name for the module

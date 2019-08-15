@@ -25,7 +25,7 @@ impl Signature {
     /// # Examples
     ///
     /// ```rust
-    /// use wasmi::{Signature, ValueType};
+    /// use metered_wasmi::{Signature, ValueType};
     ///
     /// // s1: (i32) -> ()
     /// let s1 = Signature::new(&[ValueType::I32][..], None);

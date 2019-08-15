@@ -1,10 +1,10 @@
 extern crate parity_wasm;
-extern crate wasmi;
+extern crate metered_wasmi;
 
 use std::env;
 use std::fmt;
 use std::fs::File;
-use wasmi::{
+use metered_wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
     ModuleImportResolver, ModuleInstance, ModuleRef, RuntimeArgs, RuntimeValue, Signature, Trap,
     ValueType,
@@ -195,7 +195,7 @@ fn instantiate(path: &str) -> Result<ModuleRef, Error> {
         let mut file = File::open(path).unwrap();
         let mut wasm_buf = Vec::new();
         file.read_to_end(&mut wasm_buf).unwrap();
-        wasmi::Module::from_buffer(&wasm_buf)?
+        metered_wasmi::Module::from_buffer(&wasm_buf)?
     };
 
     let mut imports = ImportsBuilder::new();

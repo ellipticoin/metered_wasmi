@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::fs::File;
 
 use wabt::script::{self, Action, Command, CommandKind, ScriptParser, Value};
-use wasmi::memory_units::Pages;
-use wasmi::{
+use metered_wasmi::memory_units::Pages;
+use metered_wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, GlobalDescriptor, GlobalInstance,
     GlobalRef, ImportResolver, ImportsBuilder, MemoryDescriptor, MemoryInstance, MemoryRef, Module,
     ModuleImportResolver, ModuleInstance, ModuleRef, RuntimeArgs, RuntimeValue, Signature,
