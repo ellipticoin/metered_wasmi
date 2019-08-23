@@ -224,6 +224,11 @@ pub enum TrapKind {
     /// Extensive inlining might also be the cause of stack overflow.
     StackOverflow,
 
+    /// Out Of Gas
+    ///
+    /// Function exceeded it's gas limit
+    OutOfGas,
+
     /// Attempt to invoke a function with mismatching signature.
     ///
     /// This can happen if [`FuncInstance`] was invoked
@@ -408,7 +413,9 @@ pub use self::host::{Externals, HostError, NopExternals, RuntimeArgs};
 pub use self::imports::{ImportResolver, ImportsBuilder, ModuleImportResolver};
 pub use self::memory::{MemoryInstance, MemoryRef, LINEAR_MEMORY_PAGE_SIZE};
 pub use self::module::{ExternVal, ModuleInstance, ModuleRef, NotStartedModuleRef};
-pub use self::runner::{FunctionContext, StackRecycler, DEFAULT_CALL_STACK_LIMIT, DEFAULT_VALUE_STACK_LIMIT};
+pub use self::runner::{
+    FunctionContext, StackRecycler, DEFAULT_CALL_STACK_LIMIT, DEFAULT_VALUE_STACK_LIMIT,
+};
 pub use self::table::{TableInstance, TableRef};
 pub use self::types::{GlobalDescriptor, MemoryDescriptor, Signature, TableDescriptor, ValueType};
 pub use self::value::{Error as ValueError, FromRuntimeValue, LittleEndianConvert, RuntimeValue};

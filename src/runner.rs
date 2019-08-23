@@ -219,7 +219,7 @@ impl Interpreter {
 
         self.state = InterpreterState::Started;
         match self.run_interpreter_loop(externals).0 {
-            Ok(()) => {},
+            Ok(()) => {}
             Err(e) => return (Err(e.into()), self.gas_left),
         };
 
@@ -282,18 +282,18 @@ impl Interpreter {
             if !function_context.is_initialized() {
                 // Initialize stack frame for the function call.
                 match function_context.initialize(&function_body.locals, &mut self.value_stack) {
-                    Ok(()) => {},
+                    Ok(()) => {}
                     Err(e) => return (Err(e.into()), self.gas_left),
-
                 };
             }
 
             let function_return = match self
                 .do_run_function(&mut function_context, &function_body.code)
-                .map_err(Trap::new) {
-                    Ok(function_return) => function_return,
-                    Err(e) => return (Err(e.into()), self.gas_left),
-                };
+                .map_err(Trap::new)
+            {
+                Ok(function_return) => function_return,
+                Err(e) => return (Err(e.into()), self.gas_left),
+            };
 
             match function_return {
                 RunResult::Return => {
@@ -319,18 +319,23 @@ impl Interpreter {
                             // We push the function context first. If the VM is not resumable, it does no harm. If it is, we then save the context here.
                             self.call_stack.push(function_context);
 
-                            let return_val =
-                                match FuncInstance::invoke(&nested_func, &args, externals, None, &(|_,_| 0)) {
-                                    (Ok(val), _gas_left) => val,
-                                    (Err(trap), _gas_left) => {
-                                        if trap.kind().is_host() {
-                                            self.state = InterpreterState::Resumable(
-                                                nested_func.signature().return_type(),
-                                            );
-                                        }
-                                        return (Err(trap), self.gas_left);
+                            let return_val = match FuncInstance::invoke(
+                                &nested_func,
+                                &args,
+                                externals,
+                                None,
+                                &(|_, _| 0),
+                            ) {
+                                (Ok(val), _gas_left) => val,
+                                (Err(trap), _gas_left) => {
+                                    if trap.kind().is_host() {
+                                        self.state = InterpreterState::Resumable(
+                                            nested_func.signature().return_type(),
+                                        );
                                     }
-                                };
+                                    return (Err(trap), self.gas_left);
+                                }
+                            };
 
                             // Check if `return_val` matches the signature.
                             let value_ty = return_val.as_ref().map(|val| val.value_type());
@@ -340,12 +345,10 @@ impl Interpreter {
                             }
 
                             if let Some(return_val) = return_val {
-                                match self.value_stack
-                                    .push(return_val.into())
-                                    .map_err(Trap::new) {
-                                        Ok(()) => {},
-                                        Err(e) => return (Err(e.into()), self.gas_left),
-                                    };
+                                match self.value_stack.push(return_val.into()).map_err(Trap::new) {
+                                    Ok(()) => {}
+                                    Err(e) => return (Err(e.into()), self.gas_left),
+                                };
                             }
                         }
                     }
@@ -368,11 +371,12 @@ impl Interpreter {
                  return or an implicit block `end`.",
             );
 
-            self.gas_left = self.gas_left.map(|gas_left| {
-                let gas_cost_fn = &self.gas_cost_fn;
-                gas_left - gas_cost_fn(&instruction, function_context)
-            });
-
+            if self
+                .update_gas_left(function_context, &instruction)
+                .is_err()
+            {
+                return Err(TrapKind::OutOfGas);
+            };
             match self.run_instruction(function_context, &instruction)? {
                 InstructionOutcome::RunNextInstruction => {}
                 InstructionOutcome::Branch(target) => {
@@ -391,6 +395,21 @@ impl Interpreter {
         }
 
         Ok(RunResult::Return)
+    }
+    fn update_gas_left(
+        &mut self,
+        function_context: &mut FunctionContext,
+        instruction: &isa::Instruction,
+    ) -> Result<(), TrapKind> {
+        if let Some(gas_left) = self.gas_left {
+            let gas_cost = &(self.gas_cost_fn)(&instruction, function_context);
+            if gas_cost > &gas_left {
+                return Err(TrapKind::OutOfGas);
+            } else {
+                self.gas_left = Some(gas_left - gas_cost);
+            }
+        };
+        Ok(())
     }
 
     #[inline(always)]
@@ -1575,5 +1594,62 @@ impl StackRecycler {
 impl Default for StackRecycler {
     fn default() -> Self {
         Self::with_limits(DEFAULT_VALUE_STACK_LIMIT, DEFAULT_CALL_STACK_LIMIT)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    macro_rules! assert_matches {
+        ($expression:expr, $($pattern:tt)+) => {
+            match $expression {
+                $($pattern)+ => (),
+                ref e => panic!("assertion failed: `{:?}` does not match `{}`", e, stringify!($($pattern)+)),
+            }
+        }
+    }
+    use host::NopExternals;
+    use imports::ImportsBuilder;
+    use isa;
+    use module::{ExternVal, ModuleInstance};
+    use runner::FunctionContext;
+    use tests::parse_wat;
+    use value::RuntimeValue;
+    use Error;
+    use Trap;
+    use TrapKind;
+    #[test]
+    fn assert_out_of_gas() {
+        let module = parse_wat(
+            r#"
+            (module
+                (func $f)
+                (start $f)
+                (export "main" (func $main))
+                (func $main (; 0 ;) (param $0 i32) (result i32)
+                (i32.add
+                    (get_local $0)
+                    (i32.const 1)
+                ))
+            )
+            "#,
+        );
+
+        let gas_limit = Some(3); // This function requires 4 gas
+        let gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32 = &|_, _| 1;
+        let module =
+            ModuleInstance::new(&module, &ImportsBuilder::default(), gas_limit, gas_cost_fn)
+                .unwrap()
+                .run_start(&mut NopExternals)
+                .unwrap();
+        let (result, gas_left) =
+            module.invoke_export("main", &[RuntimeValue::I32(1)], &mut NopExternals);
+
+        assert_matches!(
+            result,
+            Err(Error::Trap(Trap {
+                kind: TrapKind::OutOfGas
+            }))
+        );
+        assert_eq!(gas_left, Some(0));
     }
 }
