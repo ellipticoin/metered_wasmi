@@ -687,6 +687,7 @@ impl Interpreter {
             .module()
             .func_by_index(func_idx)
             .expect("Due to validation func should exists");
+
         Ok(InstructionOutcome::ExecuteCall(func))
     }
 

@@ -206,6 +206,7 @@ impl dyn HostError {
 ///         }
 ///
 ///         Ok(FuncInstance::alloc_host(
+///             "func".to_string(),
 ///             Signature::new(&[ValueType::I32, ValueType::I32][..], Some(ValueType::I32)),
 ///             index,
 ///         ))

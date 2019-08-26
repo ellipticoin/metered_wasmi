@@ -106,7 +106,7 @@ impl ModuleImportResolver for SpecModule {
             ));
         }
 
-        let func = FuncInstance::alloc_host(func_type.clone(), index);
+        let func = FuncInstance::alloc_host("func".to_string(), func_type.clone(), index);
         return Ok(func);
     }
 

@@ -171,10 +171,12 @@ impl<'a> ModuleImportResolver for RuntimeModuleImportResolver {
     ) -> Result<FuncRef, InterpreterError> {
         let func_ref = match field_name {
             "set" => FuncInstance::alloc_host(
+                field_name.to_string(),
                 Signature::new(&[ValueType::I32][..], None),
                 SET_FUNC_INDEX,
             ),
             "get" => FuncInstance::alloc_host(
+                field_name.to_string(),
                 Signature::new(&[ValueType::I32][..], Some(ValueType::I32)),
                 GET_FUNC_INDEX,
             ),

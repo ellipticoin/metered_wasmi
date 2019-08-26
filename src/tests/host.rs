@@ -214,7 +214,7 @@ impl ModuleImportResolver for TestHost {
             )));
         }
 
-        Ok(FuncInstance::alloc_host(signature.clone(), index))
+        Ok(FuncInstance::alloc_host("func".to_string(), signature.clone(), index))
     }
 
     fn resolve_memory(
@@ -561,7 +561,7 @@ fn defer_providing_externals() {
                 )));
             }
 
-            Ok(FuncInstance::alloc_host(signature.clone(), INC_FUNC_INDEX))
+            Ok(FuncInstance::alloc_host("func".to_string(), signature.clone(), INC_FUNC_INDEX))
         }
 
         fn resolve_memory(
@@ -689,7 +689,7 @@ fn two_envs_one_externals() {
                 }
             };
 
-            Ok(FuncInstance::alloc_host(signature.clone(), index))
+            Ok(FuncInstance::alloc_host("func".to_string(), signature.clone(), index))
         }
     }
 
@@ -710,7 +710,7 @@ fn two_envs_one_externals() {
                 }
             };
 
-            Ok(FuncInstance::alloc_host(signature.clone(), index))
+            Ok(FuncInstance::alloc_host("func".to_string(), signature.clone(), index))
         }
     }
 
@@ -792,6 +792,7 @@ fn dynamically_add_host_func() {
                     self.added_funcs += 1;
 
                     let added_func = FuncInstance::alloc_host(
+                        "func".to_string(),
                         Signature::new(&[][..], Some(ValueType::I32)),
                         host_func_index as usize,
                     );
@@ -820,7 +821,7 @@ fn dynamically_add_host_func() {
                     )));
                 }
             };
-            Ok(FuncInstance::alloc_host(signature.clone(), index))
+            Ok(FuncInstance::alloc_host("func".to_string(), signature.clone(), index))
         }
 
         fn resolve_table(

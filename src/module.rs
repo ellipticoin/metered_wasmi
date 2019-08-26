@@ -197,7 +197,7 @@ impl ModuleInstance {
         self.globals.borrow_mut().get(idx as usize).cloned()
     }
 
-    pub(crate) fn func_by_index(&self, idx: u32) -> Option<FuncRef> {
+    pub fn func_by_index(&self, idx: u32) -> Option<FuncRef> {
         self.funcs.borrow().get(idx as usize).cloned()
     }
 
@@ -851,6 +851,15 @@ mod tests {
     use imports::ImportsBuilder;
     use tests::parse_wat;
     use types::{Signature, ValueType};
+    use value::RuntimeValue;
+    use host::NopExternals;
+    use func::FuncRef;
+    use imports::ModuleImportResolver;
+    use host::RuntimeArgs;
+    use host::Externals;
+
+    use Error;
+    use Trap;
 
     #[should_panic]
     #[test]
@@ -868,6 +877,87 @@ mod tests {
     }
 
     #[test]
+    fn invoke_export() {
+        extern crate wabt;
+        const FUNC_INDEX: usize = 0;
+
+        pub struct EnvModuleResolver;
+
+        pub struct EnvExternals;
+        impl Externals for EnvExternals {
+            fn invoke_index(
+                &mut self,
+                index: usize,
+                args: RuntimeArgs,
+            ) -> Result<Option<RuntimeValue>, Trap> {
+                match index {
+                    FUNC_INDEX => Ok(Some(RuntimeValue::I32(1))),
+                    _ => panic!("invalid func_index"),
+                }
+            }
+        }
+
+        impl<'a> ModuleImportResolver for EnvModuleResolver {
+            fn resolve_func(
+                &self,
+                field_name: &str,
+                _signature: &Signature,
+            ) -> Result<FuncRef, Error> {
+                let func_ref = match field_name {
+                    "func" => {
+                        FuncInstance::alloc_host(
+                            field_name.to_string(),
+                            Signature::new(&[][..] ,Some(ValueType::I32)),
+                            FUNC_INDEX,
+                        )
+                    },
+                    _ => {
+                    return Err(Error::Function(format!(
+                      "host module doesn't export function with name {}",
+                      field_name
+                    )));
+                    }
+                };
+                Ok(func_ref)
+            }
+        }
+
+        let wasm_binary: Vec<u8> = wabt::wat2wasm(
+        r#"
+        (module
+            (type $FUNCSIG$i (func (result i32)))
+            (import "env" "func" (func $readMemory (result i32)))
+            (table 0 anyfunc)
+            (memory $0 1)
+            (export "memory" (memory $0))
+            (export "main" (func $main))
+            (func $main (; 1 ;) (result i32)
+            (call $readMemory)
+            )
+        )
+
+        "#,
+        ).expect("failed to parse wat");
+        let module = super::Module::from_buffer(&wasm_binary).expect("failed to load wasm");
+        let instance = ModuleInstance::new(
+        &module,
+        &ImportsBuilder::new()
+        .with_resolver("env", &EnvModuleResolver),
+        None,
+        &|_, _| 0
+        ).expect("failed to instantiate wasm module").assert_no_start();
+        assert_eq!(
+            instance.invoke_export(
+                "main",
+                &[],
+                &mut EnvExternals,
+            )
+            .0
+            .expect("failed to execute export"),
+            Some(RuntimeValue::I32(1)),
+        );
+    }
+    #[test]
     fn imports_provided_by_externvals() {
         let module_with_single_import = parse_wat(
             r#"
@@ -880,6 +970,7 @@ mod tests {
         assert!(ModuleInstance::with_externvals(
             &module_with_single_import,
             [ExternVal::Func(FuncInstance::alloc_host(
+                "func".to_string(),
                 Signature::new(&[][..], None),
                 0
             ),)]
@@ -893,8 +984,8 @@ mod tests {
         assert!(ModuleInstance::with_externvals(
             &module_with_single_import,
             [
-                ExternVal::Func(FuncInstance::alloc_host(Signature::new(&[][..], None), 0)),
-                ExternVal::Func(FuncInstance::alloc_host(Signature::new(&[][..], None), 1)),
+                ExternVal::Func(FuncInstance::alloc_host("func".to_string(), Signature::new(&[][..], None), 0)),
+                ExternVal::Func(FuncInstance::alloc_host("func".to_string(), Signature::new(&[][..], None), 1)),
             ]
             .iter(),
             None,
@@ -909,6 +1000,7 @@ mod tests {
         assert!(ModuleInstance::with_externvals(
             &module_with_single_import,
             [ExternVal::Func(FuncInstance::alloc_host(
+                "func".to_string(),
                 Signature::new(&[][..], Some(ValueType::I32)),
                 0
             ),)]
