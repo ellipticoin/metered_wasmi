@@ -154,7 +154,7 @@ impl FuncInstance {
         args: &[RuntimeValue],
         externals: &mut E,
         gas_limit: Option<u32>,
-        gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32,
+        gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> (Result<Option<RuntimeValue>, Trap>, Option<u32>) {
         match check_function_args(func.signature(), &args){
             Ok(()) => {},
@@ -188,7 +188,7 @@ impl FuncInstance {
         externals: &mut E,
         stack_recycler: &mut StackRecycler,
         gas_limit: Option<u32>,
-        gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32,
+        gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> (Result<Option<RuntimeValue>, Trap>, Option<u32>) {
         match check_function_args(func.signature(), &args) {
             Ok(()) => {},
@@ -229,7 +229,7 @@ impl FuncInstance {
         func: &FuncRef,
         args: &'args [RuntimeValue],
         gas_limit: Option<u32>,
-        gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32,
+        gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<FuncInvocation<'args>, Trap> {
         check_function_args(func.signature(), &args)?;
         match *func.as_internal() {

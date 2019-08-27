@@ -78,7 +78,7 @@
 //!             &module,
 //!             &ImportsBuilder::default(),
 //!             None,
-//!             &|_, _| 0
+//!             &|_| 0
 //!         )
 //!         .expect("failed to instantiate wasm module")
 //!         .assert_no_start();

@@ -167,7 +167,7 @@ pub struct Interpreter {
     value_stack: ValueStack,
     call_stack: CallStack,
     gas_left: Option<u32>,
-    gas_cost_fn: &'static Fn(&isa::Instruction, &FunctionContext) -> u32,
+    gas_cost_fn: &'static Fn(&isa::Instruction) -> u32,
     return_type: Option<ValueType>,
     state: InterpreterState,
 }
@@ -178,7 +178,7 @@ impl Interpreter {
         args: &[RuntimeValue],
         mut stack_recycler: Option<&mut StackRecycler>,
         gas_limit: Option<u32>,
-        gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32,
+        gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<Interpreter, Trap> {
         let mut value_stack = StackRecycler::recreate_value_stack(&mut stack_recycler);
         for &arg in args {
@@ -324,7 +324,7 @@ impl Interpreter {
                                 &args,
                                 externals,
                                 None,
-                                &(|_, _| 0),
+                                &|_| 0,
                             ) {
                                 (Ok(val), _gas_left) => val,
                                 (Err(trap), _gas_left) => {
@@ -402,7 +402,7 @@ impl Interpreter {
         instruction: &isa::Instruction,
     ) -> Result<(), TrapKind> {
         if let Some(gas_left) = self.gas_left {
-            let gas_cost = &(self.gas_cost_fn)(&instruction, function_context);
+            let gas_cost = &(self.gas_cost_fn)(&instruction);
             if gas_cost > &gas_left {
                 return Err(TrapKind::OutOfGas);
             } else {
@@ -1636,7 +1636,7 @@ mod tests {
         );
 
         let gas_limit = Some(3); // This function requires 4 gas
-        let gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32 = &|_, _| 1;
+        let gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32 = &|_,| 1;
         let module =
             ModuleInstance::new(&module, &ImportsBuilder::default(), gas_limit, gas_cost_fn)
                 .unwrap()

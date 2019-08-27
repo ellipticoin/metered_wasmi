@@ -15,7 +15,7 @@ fn load_from_file(filename: &str) -> Module {
     Module::from_buffer(buf).unwrap()
 }
 
-fn gas_cost_fn(instruction: &isa::Instruction, function_context: &FunctionContext) -> u32 {
+fn gas_cost_fn(_instruction: &isa::Instruction) -> u32 {
     1
 }
 

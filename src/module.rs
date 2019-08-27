@@ -165,13 +165,13 @@ pub struct ModuleInstance {
     globals: RefCell<Vec<GlobalRef>>,
     exports: RefCell<BTreeMap<String, ExternVal>>,
     gas_limit: Option<u32>,
-    gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32,
+    gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
 }
 
 impl ModuleInstance {
     fn default(
         gas_limit: Option<u32>,
-        gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32,
+        gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
         ) -> Self {
         ModuleInstance {
             funcs: RefCell::new(Vec::new()),
@@ -239,7 +239,7 @@ impl ModuleInstance {
         loaded_module: &Module,
         extern_vals: I,
         gas_limit: Option<u32>,
-        gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32,
+        gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<ModuleRef, Error> {
         let module = loaded_module.module();
         let instance = ModuleRef(Rc::new(ModuleInstance::default(gas_limit, gas_cost_fn)));
@@ -422,7 +422,7 @@ impl ModuleInstance {
         loaded_module: &'a Module,
         extern_vals: I,
         gas_limit: Option<u32>,
-        gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32,
+        gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<NotStartedModuleRef<'a>, Error> {
         let module = loaded_module.module();
 
@@ -510,7 +510,7 @@ impl ModuleInstance {
     ///     &module,
     ///     &ImportsBuilder::default(),
     ///     None,
-    ///     &|_, _| 0
+    ///     &|_| 0
     /// ) {
     ///     Err(error) => return Err(error),
     ///     Ok(result) => result
@@ -535,7 +535,7 @@ impl ModuleInstance {
     ///     &module,
     ///     &ImportsBuilder::default(),
     ///     None,
-    ///     &|_, _| 0
+    ///     &|_| 0
     /// ) {
     ///     Err(err) => return Err(err),
     ///     Ok(result) => result,
@@ -553,7 +553,7 @@ impl ModuleInstance {
         loaded_module: &'m Module,
         imports: &I,
         gas_limit: Option<u32>,
-        gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32,
+        gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<NotStartedModuleRef<'m>, Error> {
         let module = loaded_module.module();
 
@@ -634,7 +634,7 @@ impl ModuleInstance {
     /// # &module,
     /// # &ImportsBuilder::default(),
     /// # None,
-    /// # &|_, _| 0
+    /// # &|_| 0
     /// # ).expect("failed to instantiate wasm module").assert_no_start();
     /// assert_eq!(
     ///     instance.invoke_export(
@@ -659,7 +659,6 @@ impl ModuleInstance {
             Err(e) => return (Err(e.into()), self.gas_limit),
         };
 
-        let gas_cost_fn: Box<Fn(&isa::Instruction, &FunctionContext) -> u32> = Box::new((|_,_| 0));
         let (result, gas_left) = FuncInstance::invoke(&func_instance, args, externals, self.gas_limit, self.gas_cost_fn);
         (result.map_err(|t| Error::Trap(t)), gas_left)
     }
@@ -678,7 +677,7 @@ impl ModuleInstance {
         externals: &mut E,
         stack_recycler: &mut StackRecycler,
         gas_limit: Option<u32>,
-        gas_cost_fn: &'static dyn Fn(&isa::Instruction, &FunctionContext) -> u32,
+        gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<Option<RuntimeValue>, Error> {
         let func_instance = self.func_by_name(func_name)?;
 
@@ -757,7 +756,7 @@ impl<'a> NotStartedModuleRef<'a> {
                 .instance
                 .func_by_index(start_fn_idx)
                 .expect("Due to validation start function should exists");
-            match FuncInstance::invoke(&start_func, &[], state, None, &(|_,_| 0)) {
+            match FuncInstance::invoke(&start_func, &[], state, None, &|_| 0) {
                 (Err(e), _gas_left) => return Err(e.into()),
                 result => result,
             }.0.unwrap();
@@ -871,7 +870,7 @@ mod tests {
 				(start $f))
 			"#,
         );
-        let module = ModuleInstance::new(&module_with_start, &ImportsBuilder::default(), None, &|_, _| 0).unwrap();
+        let module = ModuleInstance::new(&module_with_start, &ImportsBuilder::default(), None, &|_| 0).unwrap();
         assert!(!module.has_start());
         module.assert_no_start();
     }
@@ -944,7 +943,7 @@ mod tests {
         &ImportsBuilder::new()
         .with_resolver("env", &EnvModuleResolver),
         None,
-        &|_, _| 0
+        &|_| 0
         ).expect("failed to instantiate wasm module").assert_no_start();
         assert_eq!(
             instance.invoke_export(
@@ -976,7 +975,7 @@ mod tests {
             ),)]
             .iter(),
             None,
-            &|_, _| 0,
+            &|_| 0,
         )
         .is_ok());
 
@@ -989,12 +988,12 @@ mod tests {
             ]
             .iter(),
             None,
-            &|_, _| 0
+            &|_| 0
         )
         .is_err());
 
         // externval vector is shorter than import count.
-        assert!(ModuleInstance::with_externvals(&module_with_single_import, [].iter(), None, &|_, _| 0).is_err());
+        assert!(ModuleInstance::with_externvals(&module_with_single_import, [].iter(), None, &|_| 0).is_err());
 
         // externval vector has an unexpected type.
         assert!(ModuleInstance::with_externvals(
@@ -1006,7 +1005,7 @@ mod tests {
             ),)]
             .iter(),
             None,
-            &|_, _| 0
+            &|_| 0
         )
         .is_err());
     }

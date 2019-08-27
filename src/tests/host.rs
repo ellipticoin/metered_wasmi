@@ -248,7 +248,7 @@ fn call_host_func() {
 
     let mut env = TestHost::new();
 
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_, _| 0)
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_| 0)
         .expect("Failed to instantiate module")
         .assert_no_start();
 
@@ -280,14 +280,14 @@ fn resume_call_host_func() {
 
     let mut env = TestHost::new();
 
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_, _| 0)
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_| 0)
         .expect("Failed to instantiate module")
         .assert_no_start();
 
     let export = instance.export_by_name("test").unwrap();
     let func_instance = export.as_func().unwrap();
 
-    let mut invocation = FuncInstance::invoke_resumable(&func_instance, &[], None, &|_, _| 0).unwrap();
+    let mut invocation = FuncInstance::invoke_resumable(&func_instance, &[], None, &|_| 0).unwrap();
     let result = invocation.start_execution(&mut env);
     match result {
         Err(ResumableError::Trap(_)) => {}
@@ -325,14 +325,14 @@ fn resume_call_host_func_type_mismatch() {
         let mut env = TestHost::new();
 
         let instance =
-            ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_, _| 0)
+            ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_| 0)
                 .expect("Failed to instantiate module")
                 .assert_no_start();
 
         let export = instance.export_by_name("test").unwrap();
         let func_instance = export.as_func().unwrap();
 
-        let mut invocation = FuncInstance::invoke_resumable(&func_instance, &[], None, &|_, _| 0).unwrap();
+        let mut invocation = FuncInstance::invoke_resumable(&func_instance, &[], None, &|_| 0).unwrap();
         let result = invocation.start_execution(&mut env);
         match result {
             Err(ResumableError::Trap(_)) => {}
@@ -382,7 +382,7 @@ fn host_err() {
 
     let mut env = TestHost::new();
 
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_, _| 0)
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_| 0)
         .expect("Failed to instantiate module")
         .assert_no_start();
 
@@ -420,7 +420,7 @@ fn modify_mem_with_host_funcs() {
 
     let mut env = TestHost::new();
 
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_, _| 0)
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_| 0)
         .expect("Failed to instantiate module")
         .assert_no_start();
 
@@ -465,7 +465,7 @@ fn pull_internal_mem_from_module() {
         trap_sub_result: None,
     };
 
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_, _| 0)
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_| 0)
         .expect("Failed to instantiate module")
         .assert_no_start();
 
@@ -516,7 +516,7 @@ fn recursion() {
 
     let mut env = TestHost::new();
 
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_, _| 0)
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_| 0)
         .expect("Failed to instantiate module")
         .assert_no_start();
 
@@ -628,7 +628,7 @@ fn defer_providing_externals() {
         &module,
         &ImportsBuilder::new().with_resolver("host", &host_import_resolver),
         None,
-        &|_, _| 0,
+        &|_| 0,
     )
     .expect("Failed to instantiate module")
     .assert_no_start();
@@ -746,7 +746,7 @@ fn two_envs_one_externals() {
         &trusted_module,
         &ImportsBuilder::new().with_resolver("env", &PrivilegedResolver),
         None,
-        &|_, _| 0,
+        &|_| 0,
     )
     .expect("Failed to instantiate module")
     .assert_no_start();
@@ -757,7 +757,7 @@ fn two_envs_one_externals() {
             .with_resolver("env", &OrdinaryResolver)
             .with_resolver("trusted", &trusted_instance),
         None,
-        &|_, _| 0,
+        &|_| 0,
     )
     .expect("Failed to instantiate module")
     .assert_no_start();
@@ -868,7 +868,7 @@ fn dynamically_add_host_func() {
         &module,
         &ImportsBuilder::new().with_resolver("env", &host_externals),
         None,
-        &|_, _| 0,
+        &|_| 0,
     )
     .expect("Failed to instantiate module")
     .assert_no_start();

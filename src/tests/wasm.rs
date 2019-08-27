@@ -95,7 +95,7 @@ fn interpreter_inc_i32() {
 
     let env = Env::new();
 
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_, _| 0)
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_| 0)
         .expect("Failed to instantiate module")
         .assert_no_start();
 
@@ -124,7 +124,7 @@ fn interpreter_accumulate_u8() {
     let module = load_from_file(WASM_FILE);
 
     let env = Env::new();
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_,_| 0)
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), None, &|_| 0)
         .expect("Failed to instantiate module")
         .assert_no_start();
 
