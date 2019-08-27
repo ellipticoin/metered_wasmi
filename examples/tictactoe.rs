@@ -203,7 +203,7 @@ fn instantiate(path: &str) -> Result<ModuleRef, Error> {
     let mut imports = ImportsBuilder::new();
     imports.push_resolver("env", &RuntimeModuleImportResolver);
 
-    let instance = match ModuleInstance::new(&module, &imports, None, &|_| 0) {
+    let instance = match ModuleInstance::new(&module, &imports, &|_| 0) {
         Err(err) => return Err(Error::Interpreter(err)),
         Ok(result) => result,
     }.assert_no_start();
@@ -228,9 +228,9 @@ fn play(
                 player: turn_of,
                 game: game,
             };
-            let _ = match instance.invoke_export("mk_turn", &[], &mut runtime) {
-                (Err(err), _gas_left) => return Err(Error::Interpreter(err)),
-                (result, _gas_left) => result,
+            let _ = match instance.invoke_export("mk_turn", &[], &mut runtime, &mut None) {
+                Err(err) => return Err(Error::Interpreter(err)),
+                result => result,
             };
         }
 

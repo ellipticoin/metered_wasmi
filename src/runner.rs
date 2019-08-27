@@ -166,8 +166,7 @@ enum RunResult {
 pub struct Interpreter {
     value_stack: ValueStack,
     call_stack: CallStack,
-    gas_left: Option<u32>,
-    gas_cost_fn: &'static Fn(&isa::Instruction) -> u32,
+    gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     return_type: Option<ValueType>,
     state: InterpreterState,
 }
@@ -177,7 +176,6 @@ impl Interpreter {
         func: &FuncRef,
         args: &[RuntimeValue],
         mut stack_recycler: Option<&mut StackRecycler>,
-        gas_limit: Option<u32>,
         gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<Interpreter, Trap> {
         let mut value_stack = StackRecycler::recreate_value_stack(&mut stack_recycler);
@@ -201,7 +199,6 @@ impl Interpreter {
             call_stack,
             return_type,
             state: InterpreterState::Initialized,
-            gas_left: gas_limit,
             gas_cost_fn,
         })
     }
@@ -213,14 +210,15 @@ impl Interpreter {
     pub fn start_execution<'a, E: Externals + 'a>(
         &mut self,
         externals: &'a mut E,
-    ) -> (Result<Option<RuntimeValue>, Trap>, Option<u32>) {
+        gas_left: &'a mut Option<u32>, 
+    ) -> Result<Option<RuntimeValue>, Trap> {
         // Ensure that the VM has not been executed. This is checked in `FuncInvocation::start_execution`.
         assert!(self.state == InterpreterState::Initialized);
 
         self.state = InterpreterState::Started;
-        match self.run_interpreter_loop(externals).0 {
+        match self.run_interpreter_loop(externals, gas_left) {
             Ok(()) => {}
-            Err(e) => return (Err(e.into()), self.gas_left),
+            Err(e) => return Err(e.into()),
         };
 
         let opt_return_value = self
@@ -230,13 +228,14 @@ impl Interpreter {
         // Ensure that stack is empty after the execution. This is guaranteed by the validation properties.
         assert!(self.value_stack.len() == 0);
 
-        (Ok(opt_return_value), self.gas_left)
+        Ok(opt_return_value)
     }
 
     pub fn resume_execution<'a, E: Externals + 'a>(
         &mut self,
         return_val: Option<RuntimeValue>,
         externals: &'a mut E,
+        gas_left: &'a mut Option<u32>, 
     ) -> Result<Option<RuntimeValue>, Trap> {
         use core::mem::swap;
 
@@ -252,7 +251,7 @@ impl Interpreter {
                 .map_err(Trap::new)?;
         }
 
-        self.run_interpreter_loop(externals).0.unwrap();
+        self.run_interpreter_loop(externals, gas_left).unwrap();
 
         let opt_return_value = self
             .return_type
@@ -267,7 +266,8 @@ impl Interpreter {
     fn run_interpreter_loop<'a, E: Externals + 'a>(
         &mut self,
         externals: &'a mut E,
-    ) -> (Result<(), Trap>, Option<u32>) {
+        gas_left: &'a mut Option<u32>, 
+    ) -> Result<(), Trap> {
         loop {
             let mut function_context = self.call_stack.pop().expect(
                 "on loop entry - not empty; on loop continue - checking for emptiness; qed",
@@ -283,16 +283,16 @@ impl Interpreter {
                 // Initialize stack frame for the function call.
                 match function_context.initialize(&function_body.locals, &mut self.value_stack) {
                     Ok(()) => {}
-                    Err(e) => return (Err(e.into()), self.gas_left),
+                    Err(e) => return Err(e.into()),
                 };
             }
 
             let function_return = match self
-                .do_run_function(&mut function_context, &function_body.code)
+                .do_run_function(&mut function_context, &function_body.code, gas_left)
                 .map_err(Trap::new)
             {
                 Ok(function_return) => function_return,
-                Err(e) => return (Err(e.into()), self.gas_left),
+                Err(e) => return Err(e.into()),
             };
 
             match function_return {
@@ -300,12 +300,12 @@ impl Interpreter {
                     if self.call_stack.is_empty() {
                         // This was the last frame in the call stack. This means we
                         // are done executing.
-                        return (Ok(()), self.gas_left);
+                        return Ok(());
                     }
                 }
                 RunResult::NestedCall(nested_func) => {
                     if self.call_stack.is_full() {
-                        return (Err(TrapKind::StackOverflow.into()), self.gas_left);
+                        return Err(TrapKind::StackOverflow.into());
                     }
 
                     match *nested_func.as_internal() {
@@ -323,17 +323,17 @@ impl Interpreter {
                                 &nested_func,
                                 &args,
                                 externals,
-                                None,
+                                &mut None,
                                 &|_| 0,
                             ) {
-                                (Ok(val), _gas_left) => val,
-                                (Err(trap), _gas_left) => {
+                                Ok(val) => val,
+                                Err(trap) => {
                                     if trap.kind().is_host() {
                                         self.state = InterpreterState::Resumable(
                                             nested_func.signature().return_type(),
                                         );
                                     }
-                                    return (Err(trap), self.gas_left);
+                                    return Err(trap);
                                 }
                             };
 
@@ -341,13 +341,13 @@ impl Interpreter {
                             let value_ty = return_val.as_ref().map(|val| val.value_type());
                             let expected_ty = nested_func.signature().return_type();
                             if value_ty != expected_ty {
-                                return (Err(TrapKind::UnexpectedSignature.into()), self.gas_left);
+                                return Err(TrapKind::UnexpectedSignature.into());
                             }
 
                             if let Some(return_val) = return_val {
                                 match self.value_stack.push(return_val.into()).map_err(Trap::new) {
                                     Ok(()) => {}
-                                    Err(e) => return (Err(e.into()), self.gas_left),
+                                    Err(e) => return Err(e.into()),
                                 };
                             }
                         }
@@ -361,6 +361,7 @@ impl Interpreter {
         &mut self,
         function_context: &mut FunctionContext,
         instructions: &isa::Instructions,
+        gas_left: &mut Option<u32>, 
     ) -> Result<RunResult, TrapKind> {
         let mut iter = instructions.iterate_from(function_context.position);
 
@@ -371,12 +372,7 @@ impl Interpreter {
                  return or an implicit block `end`.",
             );
 
-            if self
-                .update_gas_left(function_context, &instruction)
-                .is_err()
-            {
-                return Err(TrapKind::OutOfGas);
-            };
+            self.update_gas_left(&instruction, gas_left)?;
             match self.run_instruction(function_context, &instruction)? {
                 InstructionOutcome::RunNextInstruction => {}
                 InstructionOutcome::Branch(target) => {
@@ -396,17 +392,18 @@ impl Interpreter {
 
         Ok(RunResult::Return)
     }
+    
     fn update_gas_left(
         &mut self,
-        function_context: &mut FunctionContext,
         instruction: &isa::Instruction,
+        gas_left: &mut Option<u32>, 
     ) -> Result<(), TrapKind> {
-        if let Some(gas_left) = self.gas_left {
+        if let Some(gas_left_value) = gas_left {
             let gas_cost = &(self.gas_cost_fn)(&instruction);
-            if gas_cost > &gas_left {
+            if gas_cost > gas_left_value {
                 return Err(TrapKind::OutOfGas);
             } else {
-                self.gas_left = Some(gas_left - gas_cost);
+                *gas_left = Some(*gas_left_value - gas_cost);
             }
         };
         Ok(())
@@ -1611,8 +1608,7 @@ mod tests {
     use host::NopExternals;
     use imports::ImportsBuilder;
     use isa;
-    use module::{ExternVal, ModuleInstance};
-    use runner::FunctionContext;
+    use module::ModuleInstance;
     use tests::parse_wat;
     use value::RuntimeValue;
     use Error;
@@ -1635,15 +1631,15 @@ mod tests {
             "#,
         );
 
-        let gas_limit = Some(3); // This function requires 4 gas
+        let mut gas_left = Some(3); // This function requires 4 gas
         let gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32 = &|_,| 1;
         let module =
-            ModuleInstance::new(&module, &ImportsBuilder::default(), gas_limit, gas_cost_fn)
+            ModuleInstance::new(&module, &ImportsBuilder::default(), gas_cost_fn)
                 .unwrap()
                 .run_start(&mut NopExternals)
                 .unwrap();
-        let (result, gas_left) =
-            module.invoke_export("main", &[RuntimeValue::I32(1)], &mut NopExternals);
+        let result =
+            module.invoke_export("main", &[RuntimeValue::I32(1)], &mut NopExternals, &mut gas_left);
 
         assert_matches!(
             result,

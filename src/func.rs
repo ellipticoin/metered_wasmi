@@ -7,7 +7,7 @@ use host::Externals;
 use isa;
 use module::ModuleInstance;
 use parity_wasm::elements::Local;
-use runner::{check_function_args, Interpreter, InterpreterState, StackRecycler, FunctionContext};
+use runner::{check_function_args, Interpreter, InterpreterState, StackRecycler};
 use types::ValueType;
 use value::RuntimeValue;
 use {Signature, Trap};
@@ -153,25 +153,25 @@ impl FuncInstance {
         func: &FuncRef,
         args: &[RuntimeValue],
         externals: &mut E,
-        gas_limit: Option<u32>,
+        gas_left: &mut Option<u32>,
         gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
-    ) -> (Result<Option<RuntimeValue>, Trap>, Option<u32>) {
+    ) -> Result<Option<RuntimeValue>, Trap> {
         match check_function_args(func.signature(), &args){
             Ok(()) => {},
-            Err(e) => return (Err(e.into()), gas_limit),
+            Err(e) => return Err(e.into()),
         };
         match *func.as_internal() {
             FuncInstanceInternal::Internal { .. } => {
-                let mut interpreter = match Interpreter::new(func, args, None, gas_limit, gas_cost_fn) {
+                let mut interpreter = match Interpreter::new(func, args, None, gas_cost_fn) {
                     Ok(interpreter) => interpreter,
-                    Err(e) => return (Err(e.into()), gas_limit),
+                    Err(e) => return Err(e.into()),
                 };
-                interpreter.start_execution(externals)
+                interpreter.start_execution(externals, gas_left)
             }
             FuncInstanceInternal::Host {
                 ref host_func_index,
                 ..
-            } => (externals.invoke_index(*host_func_index, args.into()), None),
+            } => externals.invoke_index(*host_func_index, args.into()),
         }
     }
 
@@ -187,27 +187,27 @@ impl FuncInstance {
         args: &[RuntimeValue],
         externals: &mut E,
         stack_recycler: &mut StackRecycler,
-        gas_limit: Option<u32>,
+        gas_left: &mut Option<u32>,
         gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
-    ) -> (Result<Option<RuntimeValue>, Trap>, Option<u32>) {
+    ) -> Result<Option<RuntimeValue>, Trap> {
         match check_function_args(func.signature(), &args) {
             Ok(()) => {},
-            Err(e) => return (Err(e.into()), gas_limit),
+            Err(e) => return Err(e.into()),
         };
         match *func.as_internal() {
             FuncInstanceInternal::Internal { .. } => {
-                let mut interpreter = match Interpreter::new(func, args, Some(stack_recycler), gas_limit, gas_cost_fn) {
+                let mut interpreter = match Interpreter::new(func, args, Some(stack_recycler), gas_cost_fn) {
                     Ok(interpreter) => interpreter,
-                    Err(e) => return (Err(e.into()), gas_limit),
+                    Err(e) => return Err(e.into()),
                 };
-                let return_value = interpreter.start_execution(externals);
+                let return_value = interpreter.start_execution(externals, gas_left);
                 stack_recycler.recycle(interpreter);
                 return_value
             }
             FuncInstanceInternal::Host {
                 ref host_func_index,
                 ..
-            } => (externals.invoke_index(*host_func_index, args.into()), gas_limit),
+            } => externals.invoke_index(*host_func_index, args.into()),
         }
     }
 
@@ -228,13 +228,12 @@ impl FuncInstance {
     pub fn invoke_resumable<'args>(
         func: &FuncRef,
         args: &'args [RuntimeValue],
-        gas_limit: Option<u32>,
         gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<FuncInvocation<'args>, Trap> {
         check_function_args(func.signature(), &args)?;
         match *func.as_internal() {
             FuncInstanceInternal::Internal { .. } => {
-                let interpreter = Interpreter::new(func, args, None, gas_limit, gas_cost_fn)?;
+                let interpreter = Interpreter::new(func, args, None, gas_cost_fn)?;
                 Ok(FuncInvocation {
                     kind: FuncInvocationKind::Internal(interpreter),
                 })
@@ -321,13 +320,14 @@ impl<'args> FuncInvocation<'args> {
     pub fn start_execution<'externals, E: Externals + 'externals>(
         &mut self,
         externals: &'externals mut E,
+        gas_left: &'externals mut Option<u32>,
     ) -> Result<Option<RuntimeValue>, ResumableError> {
         match self.kind {
             FuncInvocationKind::Internal(ref mut interpreter) => {
                 if interpreter.state() != &InterpreterState::Initialized {
                     return Err(ResumableError::AlreadyStarted);
                 }
-                Ok(interpreter.start_execution(externals).0?)
+                Ok(interpreter.start_execution(externals, gas_left)?)
             }
             FuncInvocationKind::Host {
                 ref args,
@@ -355,6 +355,7 @@ impl<'args> FuncInvocation<'args> {
         &mut self,
         return_val: Option<RuntimeValue>,
         externals: &'externals mut E,
+        gas_left: &'externals mut Option<u32>, 
     ) -> Result<Option<RuntimeValue>, ResumableError> {
         use crate::TrapKind;
 
@@ -367,7 +368,7 @@ impl<'args> FuncInvocation<'args> {
         match &mut self.kind {
             FuncInvocationKind::Internal(interpreter) => {
                 if interpreter.state().is_resumable() {
-                    Ok(interpreter.resume_execution(return_val, externals)?)
+                    Ok(interpreter.resume_execution(return_val, externals, gas_left)?)
                 } else {
                     Err(ResumableError::AlreadyStarted)
                 }

@@ -24,7 +24,6 @@ use table::TableRef;
 use types::{GlobalDescriptor, MemoryDescriptor, TableDescriptor};
 use validation::{DEFAULT_MEMORY_INDEX, DEFAULT_TABLE_INDEX};
 use {Error, MemoryInstance, Module, RuntimeValue, Signature, TableInstance};
-use runner::{FunctionContext};
 
 /// Reference to a [`ModuleInstance`].
 ///
@@ -164,13 +163,11 @@ pub struct ModuleInstance {
     memories: RefCell<Vec<MemoryRef>>,
     globals: RefCell<Vec<GlobalRef>>,
     exports: RefCell<BTreeMap<String, ExternVal>>,
-    gas_limit: Option<u32>,
     gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
 }
 
 impl ModuleInstance {
     fn default(
-        gas_limit: Option<u32>,
         gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
         ) -> Self {
         ModuleInstance {
@@ -180,7 +177,6 @@ impl ModuleInstance {
             memories: RefCell::new(Vec::new()),
             globals: RefCell::new(Vec::new()),
             exports: RefCell::new(BTreeMap::new()),
-            gas_limit: gas_limit,
             gas_cost_fn: gas_cost_fn,
         }
     }
@@ -238,11 +234,10 @@ impl ModuleInstance {
     fn alloc_module<'i, I: Iterator<Item = &'i ExternVal>>(
         loaded_module: &Module,
         extern_vals: I,
-        gas_limit: Option<u32>,
         gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<ModuleRef, Error> {
         let module = loaded_module.module();
-        let instance = ModuleRef(Rc::new(ModuleInstance::default(gas_limit, gas_cost_fn)));
+        let instance = ModuleRef(Rc::new(ModuleInstance::default(gas_cost_fn)));
 
         for &Type::Function(ref ty) in module.type_section().map(|ts| ts.types()).unwrap_or(&[]) {
             let signature = Rc::new(Signature::from_elements(ty));
@@ -421,12 +416,11 @@ impl ModuleInstance {
     pub fn with_externvals<'a, 'i, I: Iterator<Item = &'i ExternVal>>(
         loaded_module: &'a Module,
         extern_vals: I,
-        gas_limit: Option<u32>,
         gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<NotStartedModuleRef<'a>, Error> {
         let module = loaded_module.module();
 
-        let module_ref = ModuleInstance::alloc_module(loaded_module, extern_vals, gas_limit, gas_cost_fn)?;
+        let module_ref = ModuleInstance::alloc_module(loaded_module, extern_vals, gas_cost_fn)?;
 
         for element_segment in module
             .elements_section()
@@ -509,7 +503,6 @@ impl ModuleInstance {
     /// let not_started = match ModuleInstance::new(
     ///     &module,
     ///     &ImportsBuilder::default(),
-    ///     None,
     ///     &|_| 0
     /// ) {
     ///     Err(error) => return Err(error),
@@ -534,7 +527,6 @@ impl ModuleInstance {
     /// let not_started = match ModuleInstance::new(
     ///     &module,
     ///     &ImportsBuilder::default(),
-    ///     None,
     ///     &|_| 0
     /// ) {
     ///     Err(err) => return Err(err),
@@ -552,7 +544,6 @@ impl ModuleInstance {
     pub fn new<'m, I: ImportResolver>(
         loaded_module: &'m Module,
         imports: &I,
-        gas_limit: Option<u32>,
         gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<NotStartedModuleRef<'m>, Error> {
         let module = loaded_module.module();
@@ -593,7 +584,7 @@ impl ModuleInstance {
             extern_vals.push(extern_val);
         }
 
-        Self::with_externvals(loaded_module, extern_vals.iter(), gas_limit, gas_cost_fn)
+        Self::with_externvals(loaded_module, extern_vals.iter(), gas_cost_fn)
     }
 
     /// Invoke exported function by a name.
@@ -633,7 +624,6 @@ impl ModuleInstance {
     /// # let instance = ModuleInstance::new(
     /// # &module,
     /// # &ImportsBuilder::default(),
-    /// # None,
     /// # &|_| 0
     /// # ).expect("failed to instantiate wasm module").assert_no_start();
     /// assert_eq!(
@@ -641,8 +631,8 @@ impl ModuleInstance {
     ///         "add",
     ///         &[RuntimeValue::I32(5), RuntimeValue::I32(3)],
     ///         &mut NopExternals,
+    ///         &mut None
     ///     )
-    ///     .0
     ///     .expect("failed to execute export"),
     ///     Some(RuntimeValue::I32(8)),
     /// );
@@ -653,14 +643,15 @@ impl ModuleInstance {
         func_name: &str,
         args: &[RuntimeValue],
         externals: &mut E,
-    ) -> (Result<Option<RuntimeValue>, Error>, Option<u32>) {
+        gas_left: &mut Option<u32>
+    ) -> Result<Option<RuntimeValue>, Error> {
         let func_instance = match self.func_by_name(func_name) {
             Ok(func_instance) => func_instance,
-            Err(e) => return (Err(e.into()), self.gas_limit),
+            Err(e) => return Err(e.into()),
         };
 
-        let (result, gas_left) = FuncInstance::invoke(&func_instance, args, externals, self.gas_limit, self.gas_cost_fn);
-        (result.map_err(|t| Error::Trap(t)), gas_left)
+        let result = FuncInstance::invoke(&func_instance, args, externals, gas_left, self.gas_cost_fn);
+        result.map_err(|t| Error::Trap(t))
     }
 
     /// Invoke exported function by a name using recycled stacks.
@@ -676,13 +667,12 @@ impl ModuleInstance {
         args: &[RuntimeValue],
         externals: &mut E,
         stack_recycler: &mut StackRecycler,
-        gas_limit: Option<u32>,
+        gas_limit: &mut Option<u32>,
         gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<Option<RuntimeValue>, Error> {
         let func_instance = self.func_by_name(func_name)?;
 
         FuncInstance::invoke_with_stack(&func_instance, args, externals, stack_recycler, gas_limit, gas_cost_fn)
-            .0
             .map_err(|t| Error::Trap(t))
     }
 
@@ -756,10 +746,10 @@ impl<'a> NotStartedModuleRef<'a> {
                 .instance
                 .func_by_index(start_fn_idx)
                 .expect("Due to validation start function should exists");
-            match FuncInstance::invoke(&start_func, &[], state, None, &|_| 0) {
-                (Err(e), _gas_left) => return Err(e.into()),
+            match FuncInstance::invoke(&start_func, &[], state, &mut None, &|_| 0) {
+                Err(e) => return Err(e.into()),
                 result => result,
-            }.0.unwrap();
+            }.unwrap();
         }
         Ok(self.instance)
     }
@@ -851,7 +841,6 @@ mod tests {
     use tests::parse_wat;
     use types::{Signature, ValueType};
     use value::RuntimeValue;
-    use host::NopExternals;
     use func::FuncRef;
     use imports::ModuleImportResolver;
     use host::RuntimeArgs;
@@ -870,7 +859,7 @@ mod tests {
 				(start $f))
 			"#,
         );
-        let module = ModuleInstance::new(&module_with_start, &ImportsBuilder::default(), None, &|_| 0).unwrap();
+        let module = ModuleInstance::new(&module_with_start, &ImportsBuilder::default(), &|_| 0).unwrap();
         assert!(!module.has_start());
         module.assert_no_start();
     }
@@ -887,7 +876,7 @@ mod tests {
             fn invoke_index(
                 &mut self,
                 index: usize,
-                args: RuntimeArgs,
+                _args: RuntimeArgs,
             ) -> Result<Option<RuntimeValue>, Trap> {
                 match index {
                     FUNC_INDEX => Ok(Some(RuntimeValue::I32(1))),
@@ -942,7 +931,6 @@ mod tests {
         &module,
         &ImportsBuilder::new()
         .with_resolver("env", &EnvModuleResolver),
-        None,
         &|_| 0
         ).expect("failed to instantiate wasm module").assert_no_start();
         assert_eq!(
@@ -950,8 +938,8 @@ mod tests {
                 "main",
                 &[],
                 &mut EnvExternals,
+                &mut None
             )
-            .0
             .expect("failed to execute export"),
             Some(RuntimeValue::I32(1)),
         );
@@ -974,7 +962,6 @@ mod tests {
                 0
             ),)]
             .iter(),
-            None,
             &|_| 0,
         )
         .is_ok());
@@ -987,13 +974,12 @@ mod tests {
                 ExternVal::Func(FuncInstance::alloc_host("func".to_string(), Signature::new(&[][..], None), 1)),
             ]
             .iter(),
-            None,
             &|_| 0
         )
         .is_err());
 
         // externval vector is shorter than import count.
-        assert!(ModuleInstance::with_externvals(&module_with_single_import, [].iter(), None, &|_| 0).is_err());
+        assert!(ModuleInstance::with_externvals(&module_with_single_import, [].iter(), &|_| 0).is_err());
 
         // externval vector has an unexpected type.
         assert!(ModuleInstance::with_externvals(
@@ -1004,7 +990,6 @@ mod tests {
                 0
             ),)]
             .iter(),
-            None,
             &|_| 0
         )
         .is_err());

@@ -4,8 +4,7 @@ extern crate metered_wasmi;
 
 use std::env::args;
 use std::fs::File;
-use metered_wasmi::{ImportsBuilder, Module, ModuleInstance, NopExternals, RuntimeValue, FunctionContext, isa};
-use metered_wasmi::isa::Instruction::*;
+use metered_wasmi::{ImportsBuilder, Module, ModuleInstance, NopExternals, RuntimeValue, isa};
 
 fn load_from_file(filename: &str) -> Module {
     use std::io::prelude::*;
@@ -36,8 +35,8 @@ fn main() {
     // - a module declaration
     // - "main" module doesn't import native module(s) this is why we don't need to provide external native modules here
     // This test shows how to implement native module https://github.com/NikVolf/parity-wasm/blob/master/src/interpreter/tests/basics.rs#L197
-    let gas_limit = 10000;
-    let main = ModuleInstance::new(&module, &ImportsBuilder::default(), Some(gas_limit), &gas_cost_fn)
+    let mut gas_left = Some(10000);
+    let main = ModuleInstance::new(&module, &ImportsBuilder::default(), &gas_cost_fn)
         .expect("Failed to instantiate module")
         .run_start(&mut NopExternals)
         .expect("Failed to run start function in module");
@@ -45,11 +44,11 @@ fn main() {
     // The argument should be parsable as a valid integer
     let argument: i32 = args[2].parse().expect("Integer argument required");
 
-    let (result, gas_left) = main.invoke_export("_call", &[RuntimeValue::I32(argument)], &mut NopExternals);
+    let result = main.invoke_export("_call", &[RuntimeValue::I32(argument)], &mut NopExternals, &mut gas_left);
     // "_call" export of function to be executed with an i32 argument and prints the result of execution
     println!(
         "Result: {:?}\nGas Used: {:?}",
         result,
-        gas_limit - gas_left.unwrap_or(0)
+        gas_left,
     );
 }
