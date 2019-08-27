@@ -1,6 +1,7 @@
 use core::any::TypeId;
 use value::{FromRuntimeValue, RuntimeValue};
 use {Trap, TrapKind};
+use isa;
 
 /// Wrapper around slice of [`RuntimeValue`] for using it
 /// as an argument list conveniently.
@@ -141,7 +142,7 @@ impl dyn HostError {
 ///
 /// ```rust
 /// use metered_wasmi::{
-///     Externals, RuntimeValue, RuntimeArgs, Error, ModuleImportResolver,
+///     isa, Externals, RuntimeValue, RuntimeArgs, Error, ModuleImportResolver,
 ///     FuncRef, ValueType, Signature, FuncInstance, Trap,
 /// };
 ///
@@ -167,8 +168,13 @@ impl dyn HostError {
 ///             }
 ///             _ => panic!("Unimplemented function at {}", index),
 ///         }
+///        }
+///
+///        fn use_gas(
+///           &mut self,
+///           _instruction: &isa::Instruction
+///        ) {}
 ///     }
-/// }
 ///
 /// impl HostExternals {
 ///     fn check_signature(
@@ -220,6 +226,11 @@ pub trait Externals {
         index: usize,
         args: RuntimeArgs,
     ) -> Result<Option<RuntimeValue>, Trap>;
+
+    fn use_gas(
+        &mut self,
+        instruction: &isa::Instruction
+    );
 }
 
 /// Implementation of [`Externals`] that just traps on [`invoke_index`].
@@ -236,6 +247,11 @@ impl Externals for NopExternals {
     ) -> Result<Option<RuntimeValue>, Trap> {
         Err(TrapKind::Unreachable.into())
     }
+
+    fn use_gas(
+        &mut self,
+        _instruction: &isa::Instruction
+    ) {}
 }
 
 #[cfg(test)]

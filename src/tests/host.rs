@@ -1,6 +1,7 @@
 use super::parse_wat;
 use memory_units::Pages;
 use types::ValueType;
+use isa;
 use {
     Error, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder, MemoryDescriptor,
     MemoryInstance, MemoryRef, ModuleImportResolver, ModuleInstance, ModuleRef, ResumableError,
@@ -163,6 +164,11 @@ impl Externals for TestHost {
             _ => panic!("env doesn't provide function at index {}", index),
         }
     }
+
+    fn use_gas(
+        &mut self,
+        _instruction: &isa::Instruction
+        ) {}
 }
 
 impl TestHost {
@@ -596,6 +602,11 @@ fn defer_providing_externals() {
                 _ => panic!("env module doesn't provide function at index {}", index),
             }
         }
+
+        fn use_gas(
+            &mut self,
+            _instruction: &isa::Instruction
+        ) {}
     }
 
     let module = parse_wat(
@@ -663,6 +674,11 @@ fn two_envs_one_externals() {
                 _ => panic!("env module doesn't provide function at index {}", index),
             }
         }
+
+        fn use_gas(
+            &mut self,
+            _instruction: &isa::Instruction
+        ) {}
     }
 
     struct PrivilegedResolver;
@@ -797,6 +813,11 @@ fn dynamically_add_host_func() {
                 _ => panic!("'env' module doesn't provide function at index {}", index),
             }
         }
+
+        fn use_gas(
+            &mut self,
+            _instruction: &isa::Instruction
+        ) {}
     }
 
     impl ModuleImportResolver for HostExternals {

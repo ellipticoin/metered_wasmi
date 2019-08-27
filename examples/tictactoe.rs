@@ -9,6 +9,7 @@ use metered_wasmi::{
     ModuleImportResolver, ModuleInstance, ModuleRef, RuntimeArgs, RuntimeValue, Signature, Trap,
     ValueType,
 };
+use metered_wasmi::isa;
 
 #[derive(Debug)]
 pub enum Error {
@@ -159,6 +160,11 @@ impl<'a> Externals for Runtime<'a> {
             _ => panic!("unknown function index"),
         }
     }
+
+    fn use_gas(
+        &mut self,
+        _instruction: &isa::Instruction
+        ) {}
 }
 
 struct RuntimeModuleImportResolver;

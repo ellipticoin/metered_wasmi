@@ -846,8 +846,10 @@ mod tests {
     use host::RuntimeArgs;
     use host::Externals;
 
+    use isa;
     use Error;
     use Trap;
+
 
     #[should_panic]
     #[test]
@@ -883,6 +885,11 @@ mod tests {
                     _ => panic!("invalid func_index"),
                 }
             }
+
+            fn use_gas(
+                &mut self,
+                _instruction: &isa::Instruction
+                ) {}
         }
 
         impl<'a> ModuleImportResolver for EnvModuleResolver {

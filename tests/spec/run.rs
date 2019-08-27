@@ -11,6 +11,7 @@ use metered_wasmi::{
     ModuleImportResolver, ModuleInstance, ModuleRef, RuntimeArgs, RuntimeValue, Signature,
     TableDescriptor, TableInstance, TableRef, Trap,
 };
+use metered_wasmi::isa;
 
 fn spec_to_runtime_value(val: Value<u32, u64>) -> RuntimeValue {
     match val {
@@ -77,6 +78,11 @@ impl Externals for SpecModule {
             _ => panic!("SpecModule doesn't provide function at index {}", index),
         }
     }
+
+    fn use_gas(
+        &mut self,
+        _instruction: &isa::Instruction
+        ) {}
 }
 
 impl ModuleImportResolver for SpecModule {
