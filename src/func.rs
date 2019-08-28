@@ -52,7 +52,6 @@ pub(crate) enum FuncInstanceInternal {
     },
     Host {
         signature: Signature,
-        host_func_name: String,
         host_func_index: usize,
     },
 }
@@ -65,8 +64,8 @@ impl fmt::Debug for FuncInstance {
                 // debug string for function instances and this will lead to infinite loop.
                 write!(f, "Internal {{ signature={:?} }}", signature,)
             }
-            &FuncInstanceInternal::Host { ref signature, ref host_func_name, .. } => {
-                write!(f, "Host {{ signature={:?} host_func_name={:?}}}", signature, host_func_name)
+            &FuncInstanceInternal::Host { ref signature, .. } => {
+                write!(f, "Host {{ signature={:?} }}", signature)
             }
         }
     }
@@ -81,10 +80,9 @@ impl FuncInstance {
     /// This call will be made with the `signature` provided here.
     ///
     /// [`Externals`]: trait.Externals.html
-    pub fn alloc_host(host_func_name: String, signature: Signature, host_func_index: usize) -> FuncRef {
+    pub fn alloc_host(signature: Signature, host_func_index: usize) -> FuncRef {
         let func = FuncInstanceInternal::Host {
             signature,
-            host_func_name,
             host_func_index,
         };
         FuncRef(Rc::new(FuncInstance(func)))
@@ -99,20 +97,6 @@ impl FuncInstance {
         match *self.as_internal() {
             FuncInstanceInternal::Internal { ref signature, .. } => signature,
             FuncInstanceInternal::Host { ref signature, .. } => signature,
-        }
-    }
-
-    pub fn host_func_name(&self) -> &String {
-        match *self.as_internal() {
-            FuncInstanceInternal::Host { ref host_func_name, .. } => host_func_name,
-            FuncInstanceInternal::Internal { .. } => panic!("not a host function"),
-        }
-    }
-
-    pub fn is_host_func(&self) -> bool {
-        match *self.as_internal() {
-            FuncInstanceInternal::Host { .. } => true,
-            FuncInstanceInternal::Internal { .. } => false,
         }
     }
 

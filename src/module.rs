@@ -889,7 +889,6 @@ mod tests {
                 let func_ref = match field_name {
                     "func" => {
                         FuncInstance::alloc_host(
-                            field_name.to_string(),
                             Signature::new(&[][..] ,Some(ValueType::I32)),
                             FUNC_INDEX,
                         )
@@ -950,7 +949,6 @@ mod tests {
         assert!(ModuleInstance::with_externvals(
             &module_with_single_import,
             [ExternVal::Func(FuncInstance::alloc_host(
-                "func".to_string(),
                 Signature::new(&[][..], None),
                 0
             ),)]
@@ -962,8 +960,8 @@ mod tests {
         assert!(ModuleInstance::with_externvals(
             &module_with_single_import,
             [
-                ExternVal::Func(FuncInstance::alloc_host("func".to_string(), Signature::new(&[][..], None), 0)),
-                ExternVal::Func(FuncInstance::alloc_host("func".to_string(), Signature::new(&[][..], None), 1)),
+                ExternVal::Func(FuncInstance::alloc_host(Signature::new(&[][..], None), 0)),
+                ExternVal::Func(FuncInstance::alloc_host(Signature::new(&[][..], None), 1)),
             ]
             .iter(),
         )
@@ -976,7 +974,6 @@ mod tests {
         assert!(ModuleInstance::with_externvals(
             &module_with_single_import,
             [ExternVal::Func(FuncInstance::alloc_host(
-                "func".to_string(),
                 Signature::new(&[][..], Some(ValueType::I32)),
                 0
             ),)]

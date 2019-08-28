@@ -24,7 +24,7 @@ struct ResolveAll;
 
 impl ModuleImportResolver for ResolveAll {
     fn resolve_func(&self, _field_name: &str, signature: &Signature) -> Result<FuncRef, Error> {
-        Ok(FuncInstance::alloc_host("func".to_string(), signature.clone(), 0))
+        Ok(FuncInstance::alloc_host(signature.clone(), 0))
     }
 
     fn resolve_global(
