@@ -9,7 +9,7 @@ use metered_wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, GlobalDescriptor, GlobalInstance,
     GlobalRef, ImportResolver, ImportsBuilder, MemoryDescriptor, MemoryInstance, MemoryRef, Module,
     ModuleImportResolver, ModuleInstance, ModuleRef, RuntimeArgs, RuntimeValue, Signature,
-    TableDescriptor, TableInstance, TableRef, Trap,
+    TableDescriptor, TableInstance, TableRef, Trap, TrapKind,
 };
 use metered_wasmi::isa;
 
@@ -82,7 +82,7 @@ impl Externals for SpecModule {
     fn use_gas(
         &mut self,
         _instruction: &isa::Instruction
-        ) {}
+        ) -> Result<(), TrapKind> { Ok(())}
 }
 
 impl ModuleImportResolver for SpecModule {
@@ -270,7 +270,7 @@ fn try_load_module(wasm: &[u8]) -> Result<Module, Error> {
 
 fn try_load(wasm: &[u8], spec_driver: &mut SpecDriver) -> Result<(), Error> {
     let module = try_load_module(wasm)?;
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::default(), &|_| 0)?;
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::default())?;
     instance
         .run_start(spec_driver.spec_module())
         .map_err(|trap| Error::Start(trap))?;
@@ -283,7 +283,7 @@ fn load_module(
     spec_driver: &mut SpecDriver,
 ) -> Result<ModuleRef, Error> {
     let module = try_load_module(wasm)?;
-    let instance = ModuleInstance::new(&module, spec_driver, &|_| 0)
+    let instance = ModuleInstance::new(&module, spec_driver)
         .map_err(|e| Error::Load(e.to_string()))?
         .run_start(spec_driver.spec_module())
         .map_err(|trap| Error::Start(trap))?;
@@ -315,7 +315,7 @@ fn run_action(
                 .cloned()
                 .map(spec_to_runtime_value)
                 .collect::<Vec<_>>();
-            module.invoke_export(field, &vec_args, program.spec_module(), &mut None)
+            module.invoke_export(field, &vec_args, program.spec_module())
         }
         Action::Get {
             ref module,

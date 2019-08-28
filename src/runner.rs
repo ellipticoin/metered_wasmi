@@ -166,7 +166,6 @@ enum RunResult {
 pub struct Interpreter {
     value_stack: ValueStack,
     call_stack: CallStack,
-    gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     return_type: Option<ValueType>,
     state: InterpreterState,
 }
@@ -176,7 +175,6 @@ impl Interpreter {
         func: &FuncRef,
         args: &[RuntimeValue],
         mut stack_recycler: Option<&mut StackRecycler>,
-        gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32,
     ) -> Result<Interpreter, Trap> {
         let mut value_stack = StackRecycler::recreate_value_stack(&mut stack_recycler);
         for &arg in args {
@@ -199,7 +197,6 @@ impl Interpreter {
             call_stack,
             return_type,
             state: InterpreterState::Initialized,
-            gas_cost_fn,
         })
     }
 
@@ -210,13 +207,12 @@ impl Interpreter {
     pub fn start_execution<'a, E: Externals + 'a>(
         &mut self,
         externals: &'a mut E,
-        gas_left: &'a mut Option<u32>, 
     ) -> Result<Option<RuntimeValue>, Trap> {
         // Ensure that the VM has not been executed. This is checked in `FuncInvocation::start_execution`.
         assert!(self.state == InterpreterState::Initialized);
 
         self.state = InterpreterState::Started;
-        match self.run_interpreter_loop(externals, gas_left) {
+        match self.run_interpreter_loop(externals) {
             Ok(()) => {}
             Err(e) => return Err(e.into()),
         };
@@ -235,7 +231,6 @@ impl Interpreter {
         &mut self,
         return_val: Option<RuntimeValue>,
         externals: &'a mut E,
-        gas_left: &'a mut Option<u32>, 
     ) -> Result<Option<RuntimeValue>, Trap> {
         use core::mem::swap;
 
@@ -251,7 +246,7 @@ impl Interpreter {
                 .map_err(Trap::new)?;
         }
 
-        self.run_interpreter_loop(externals, gas_left).unwrap();
+        self.run_interpreter_loop(externals).unwrap();
 
         let opt_return_value = self
             .return_type
@@ -266,7 +261,6 @@ impl Interpreter {
     fn run_interpreter_loop<'a, E: Externals + 'a>(
         &mut self,
         externals: &'a mut E,
-        gas_left: &'a mut Option<u32>, 
     ) -> Result<(), Trap> {
         loop {
             let mut function_context = self.call_stack.pop().expect(
@@ -288,7 +282,7 @@ impl Interpreter {
             }
 
             let function_return = match self
-                .do_run_function(&mut function_context, &function_body.code, gas_left)
+                .do_run_function(&mut function_context, &function_body.code, externals)
                 .map_err(Trap::new)
             {
                 Ok(function_return) => function_return,
@@ -323,8 +317,6 @@ impl Interpreter {
                                 &nested_func,
                                 &args,
                                 externals,
-                                &mut None,
-                                &|_| 0,
                             ) {
                                 Ok(val) => val,
                                 Err(trap) => {
@@ -357,11 +349,11 @@ impl Interpreter {
         }
     }
 
-    fn do_run_function(
+    fn do_run_function<'a, E: Externals + 'a>(
         &mut self,
         function_context: &mut FunctionContext,
         instructions: &isa::Instructions,
-        gas_left: &mut Option<u32>, 
+        externals: &'a mut E,
     ) -> Result<RunResult, TrapKind> {
         let mut iter = instructions.iterate_from(function_context.position);
 
@@ -372,7 +364,7 @@ impl Interpreter {
                  return or an implicit block `end`.",
             );
 
-            self.update_gas_left(&instruction, gas_left)?;
+            externals.use_gas(&instruction)?;
             match self.run_instruction(function_context, &instruction)? {
                 InstructionOutcome::RunNextInstruction => {}
                 InstructionOutcome::Branch(target) => {
@@ -391,22 +383,6 @@ impl Interpreter {
         }
 
         Ok(RunResult::Return)
-    }
-    
-    fn update_gas_left(
-        &mut self,
-        instruction: &isa::Instruction,
-        gas_left: &mut Option<u32>, 
-    ) -> Result<(), TrapKind> {
-        if let Some(gas_left_value) = gas_left {
-            let gas_cost = &(self.gas_cost_fn)(&instruction);
-            if gas_cost > gas_left_value {
-                return Err(TrapKind::OutOfGas);
-            } else {
-                *gas_left = Some(*gas_left_value - gas_cost);
-            }
-        };
-        Ok(())
     }
 
     #[inline(always)]
@@ -1605,7 +1581,7 @@ mod tests {
             }
         }
     }
-    use host::NopExternals;
+    use host::{Externals, RuntimeArgs};
     use imports::ImportsBuilder;
     use isa;
     use module::ModuleInstance;
@@ -1616,6 +1592,32 @@ mod tests {
     use TrapKind;
     #[test]
     fn assert_out_of_gas() {
+        struct HostExternals {
+            gas: u32,
+        }
+
+        impl Externals for HostExternals {
+            fn invoke_index(
+                &mut self,
+                _index: usize,
+                _args: RuntimeArgs,
+                ) -> Result<Option<RuntimeValue>, Trap> {
+                Err(TrapKind::Unreachable.into())
+            }
+
+            fn use_gas(
+                &mut self,
+                _instruction: &isa::Instruction
+                ) -> Result<(), TrapKind> {
+                println!("{:?}", self.gas);
+                if self.gas == 0 {
+                    Err(TrapKind::OutOfGas)
+                } else {
+                    Ok(self.gas = self.gas - 1)
+                }
+            }
+        }
+
         let module = parse_wat(
             r#"
             (module
@@ -1631,15 +1633,14 @@ mod tests {
             "#,
         );
 
-        let mut gas_left = Some(3); // This function requires 4 gas
-        let gas_cost_fn: &'static dyn Fn(&isa::Instruction) -> u32 = &|_,| 1;
+        let mut host_externals = HostExternals{gas: 3}; // This function requires 4 gas
         let module =
-            ModuleInstance::new(&module, &ImportsBuilder::default(), gas_cost_fn)
+            ModuleInstance::new(&module, &ImportsBuilder::default())
                 .unwrap()
-                .run_start(&mut NopExternals)
+                .run_start(&mut host_externals)
                 .unwrap();
         let result =
-            module.invoke_export("main", &[RuntimeValue::I32(1)], &mut NopExternals, &mut gas_left);
+            module.invoke_export("main", &[RuntimeValue::I32(1)], &mut host_externals);
 
         assert_matches!(
             result,
@@ -1647,6 +1648,6 @@ mod tests {
                 kind: TrapKind::OutOfGas
             }))
         );
-        assert_eq!(gas_left, Some(0));
+        assert_eq!(host_externals.gas, 0);
     }
 }

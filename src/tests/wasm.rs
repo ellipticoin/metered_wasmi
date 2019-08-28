@@ -95,7 +95,7 @@ fn interpreter_inc_i32() {
 
     let env = Env::new();
 
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), &|_| 0)
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env))
         .expect("Failed to instantiate module")
         .assert_no_start();
 
@@ -105,7 +105,7 @@ fn interpreter_inc_i32() {
     let exp_retval = Some(RuntimeValue::I32(i32_val + 1));
 
     let retval = instance
-        .invoke_export(FUNCTION_NAME, args, &mut NopExternals, &mut None)
+        .invoke_export(FUNCTION_NAME, args, &mut NopExternals)
         .expect("");
     assert_eq!(exp_retval, retval);
 }
@@ -123,7 +123,7 @@ fn interpreter_accumulate_u8() {
     let module = load_from_file(WASM_FILE);
 
     let env = Env::new();
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env), &|_| 0)
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::new().with_resolver("env", &env))
         .expect("Failed to instantiate module")
         .assert_no_start();
 
@@ -139,7 +139,7 @@ fn interpreter_accumulate_u8() {
         RuntimeValue::I32(offset as i32),
     ];
     let retval = instance
-        .invoke_export(FUNCTION_NAME, args, &mut NopExternals, &mut None)
+        .invoke_export(FUNCTION_NAME, args, &mut NopExternals)
         .expect("Failed to execute function");
 
     // For verification, repeat accumulation using native code

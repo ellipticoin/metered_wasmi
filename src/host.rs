@@ -143,7 +143,7 @@ impl dyn HostError {
 /// ```rust
 /// use metered_wasmi::{
 ///     isa, Externals, RuntimeValue, RuntimeArgs, Error, ModuleImportResolver,
-///     FuncRef, ValueType, Signature, FuncInstance, Trap,
+///     FuncRef, ValueType, Signature, FuncInstance, Trap, TrapKind
 /// };
 ///
 /// struct HostExternals {
@@ -173,7 +173,7 @@ impl dyn HostError {
 ///        fn use_gas(
 ///           &mut self,
 ///           _instruction: &isa::Instruction
-///        ) {}
+///        ) -> Result<(), TrapKind> { Ok(())}
 ///     }
 ///
 /// impl HostExternals {
@@ -230,7 +230,7 @@ pub trait Externals {
     fn use_gas(
         &mut self,
         instruction: &isa::Instruction
-    );
+    ) -> Result<(), TrapKind>;
 }
 
 /// Implementation of [`Externals`] that just traps on [`invoke_index`].
@@ -251,7 +251,7 @@ impl Externals for NopExternals {
     fn use_gas(
         &mut self,
         _instruction: &isa::Instruction
-    ) {}
+    ) -> Result<(), TrapKind> {Ok(())}
 }
 
 #[cfg(test)]

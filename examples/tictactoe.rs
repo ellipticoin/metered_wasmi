@@ -6,7 +6,7 @@ use std::fmt;
 use std::fs::File;
 use metered_wasmi::{
     Error as InterpreterError, Externals, FuncInstance, FuncRef, HostError, ImportsBuilder,
-    ModuleImportResolver, ModuleInstance, ModuleRef, RuntimeArgs, RuntimeValue, Signature, Trap,
+    ModuleImportResolver, ModuleInstance, ModuleRef, RuntimeArgs, RuntimeValue, Signature, Trap, TrapKind,
     ValueType,
 };
 use metered_wasmi::isa;
@@ -164,7 +164,7 @@ impl<'a> Externals for Runtime<'a> {
     fn use_gas(
         &mut self,
         _instruction: &isa::Instruction
-        ) {}
+        ) -> Result<(), TrapKind> {Ok(())}
 }
 
 struct RuntimeModuleImportResolver;
@@ -209,7 +209,7 @@ fn instantiate(path: &str) -> Result<ModuleRef, Error> {
     let mut imports = ImportsBuilder::new();
     imports.push_resolver("env", &RuntimeModuleImportResolver);
 
-    let instance = match ModuleInstance::new(&module, &imports, &|_| 0) {
+    let instance = match ModuleInstance::new(&module, &imports) {
         Err(err) => return Err(Error::Interpreter(err)),
         Ok(result) => result,
     }.assert_no_start();
@@ -234,7 +234,7 @@ fn play(
                 player: turn_of,
                 game: game,
             };
-            let _ = match instance.invoke_export("mk_turn", &[], &mut runtime, &mut None) {
+            let _ = match instance.invoke_export("mk_turn", &[], &mut runtime) {
                 Err(err) => return Err(Error::Interpreter(err)),
                 result => result,
             };

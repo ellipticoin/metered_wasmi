@@ -85,7 +85,7 @@ pub trait ImportResolver {
 /// # impl ::metered_wasmi::ModuleImportResolver for EnvModuleResolver { }
 /// # fn func() -> Result<(), ::metered_wasmi::Error> {
 /// # let module = metered_wasmi::Module::from_buffer(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]).unwrap();
-/// # let other_instance = match ModuleInstance::new(&module, &ImportsBuilder::default(), &|_| 0) {
+/// # let other_instance = match ModuleInstance::new(&module, &ImportsBuilder::default()) {
 ///     Err(error) => return Err(error),
 ///     Ok(result) => result,
 /// }.assert_no_start();
@@ -94,7 +94,7 @@ pub trait ImportResolver {
 ///     .with_resolver("env", &EnvModuleResolver)
 ///     // Note, that ModuleInstance can be a resolver too.
 ///     .with_resolver("other_instance", &other_instance);
-/// let instance = match ModuleInstance::new(&module, &imports, &|_| 0) {
+/// let instance = match ModuleInstance::new(&module, &imports) {
 ///     Err(error) => return Err(error),
 ///     Ok(result) => result,
 /// }.assert_no_start();

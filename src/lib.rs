@@ -77,7 +77,6 @@
 //!         ModuleInstance::new(
 //!             &module,
 //!             &ImportsBuilder::default(),
-//!             &|_| 0
 //!         )
 //!         .expect("failed to instantiate wasm module")
 //!         .assert_no_start();
@@ -89,7 +88,6 @@
 //!             "test",
 //!             &[],
 //!             &mut NopExternals,
-//!             &mut None,
 //!         ).expect("failed to execute export"),
 //!         Some(RuntimeValue::I32(1337)),
 //!     );
