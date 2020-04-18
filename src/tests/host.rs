@@ -291,7 +291,7 @@ fn resume_call_host_func() {
     let export = instance.export_by_name("test").unwrap();
     let func_instance = export.as_func().unwrap();
 
-    let mut invocation = FuncInstance::invoke_resumable(&func_instance, &[]).unwrap();
+    let mut invocation = FuncInstance::invoke_resumable(&func_instance, &[][..]).unwrap();
     let result = invocation.start_execution(&mut env);
     match result {
         Err(ResumableError::Trap(_)) => {}
@@ -336,7 +336,7 @@ fn resume_call_host_func_type_mismatch() {
         let export = instance.export_by_name("test").unwrap();
         let func_instance = export.as_func().unwrap();
 
-        let mut invocation = FuncInstance::invoke_resumable(&func_instance, &[]).unwrap();
+        let mut invocation = FuncInstance::invoke_resumable(&func_instance, &[][..]).unwrap();
         let result = invocation.start_execution(&mut env);
         match result {
             Err(ResumableError::Trap(_)) => {}
