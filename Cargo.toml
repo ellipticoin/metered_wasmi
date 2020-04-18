@@ -1,5 +1,5 @@
 [package]
-name = "wasmi"
+name = "metered_wasmi"
 version = "0.6.2"
 authors = ["Nikolay Volf <nikvolf@gmail.com>", "Mason Fischer <mason@kissr.co>", "Svyatoslav Nikolsky <svyatonik@yandex.ru>", "Sergey Pepyakin <s.pepyakin@gmail.com>"]
 license = "MIT/Apache-2.0"

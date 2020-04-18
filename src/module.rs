@@ -7,7 +7,6 @@ use alloc::{
 use core::cell::RefCell;
 use core::fmt;
 use Trap;
-use TrapKind;
 
 use alloc::collections::BTreeMap;
 
@@ -15,7 +14,6 @@ use core::cell::Ref;
 use func::{FuncBody, FuncInstance, FuncRef};
 use global::{GlobalInstance, GlobalRef};
 use host::Externals;
-use isa;
 use imports::ImportResolver;
 use memory::MemoryRef;
 use memory_units::Pages;
@@ -39,7 +37,7 @@ use {Error, MemoryInstance, Module, RuntimeValue, Signature, TableInstance};
 /// should be retained.
 ///
 /// [`ModuleInstance`]: struct.ModuleInstance.html
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ModuleRef(pub(crate) Rc<ModuleInstance>);
 
 impl ::core::ops::Deref for ModuleRef {
@@ -157,6 +155,7 @@ impl ExternVal {
 /// [`TableInstance`]: struct.TableInstance.html
 /// [`GlobalInstance`]: struct.GlobalInstance.html
 /// [`invoke_export`]: #method.invoke_export
+#[derive(Debug)]
 pub struct ModuleInstance {
     signatures: RefCell<Vec<Rc<Signature>>>,
     tables: RefCell<Vec<TableRef>>,
@@ -190,7 +189,7 @@ impl ModuleInstance {
         self.globals.borrow_mut().get(idx as usize).cloned()
     }
 
-    pub fn func_by_index(&self, idx: u32) -> Option<FuncRef> {
+    pub(crate) fn func_by_index(&self, idx: u32) -> Option<FuncRef> {
         self.funcs.borrow().get(idx as usize).cloned()
     }
 
@@ -422,7 +421,11 @@ impl ModuleInstance {
             .map(|es| es.entries())
             .unwrap_or(&[])
         {
-            let offset_val = match eval_init_expr(element_segment.offset(), &module_ref) {
+            let offset = element_segment
+                .offset()
+                .as_ref()
+                .expect("passive segments are rejected due to validation");
+            let offset_val = match eval_init_expr(offset, &module_ref) {
                 RuntimeValue::I32(v) => v as u32,
                 _ => panic!("Due to validation elem segment offset should evaluate to i32"),
             };
@@ -451,7 +454,11 @@ impl ModuleInstance {
         }
 
         for data_segment in module.data_section().map(|ds| ds.entries()).unwrap_or(&[]) {
-            let offset_val = match eval_init_expr(data_segment.offset(), &module_ref) {
+            let offset = data_segment
+                .offset()
+                .as_ref()
+                .expect("passive segments are rejected due to validation");
+            let offset_val = match eval_init_expr(offset, &module_ref) {
                 RuntimeValue::I32(v) => v as u32,
                 _ => panic!("Due to validation data segment offset should evaluate to i32"),
             };
@@ -495,13 +502,10 @@ impl ModuleInstance {
     /// # let module = metered_wasmi::Module::from_buffer(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]).unwrap();
     ///
     /// // ModuleInstance::new returns instance which `start` function isn't called.
-    /// let not_started = match ModuleInstance::new(
+    /// let not_started = ModuleInstance::new(
     ///     &module,
-    ///     &ImportsBuilder::default(),
-    /// ) {
-    ///     Err(error) => return Err(error),
-    ///     Ok(result) => result
-    /// };
+    ///     &ImportsBuilder::default()
+    /// )?;
     /// // Call `start` function if any.
     /// let instance = not_started.run_start(&mut NopExternals)?;
     ///
@@ -518,13 +522,10 @@ impl ModuleInstance {
     /// # let module = metered_wasmi::Module::from_buffer(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]).unwrap();
     ///
     /// // This will panic if the module actually contain `start` function.
-    /// let not_started = match ModuleInstance::new(
+    /// let not_started = ModuleInstance::new(
     ///     &module,
-    ///     &ImportsBuilder::default(),
-    /// ) {
-    ///     Err(err) => return Err(err),
-    ///     Ok(result) => result,
-    /// }.assert_no_start();
+    ///     &ImportsBuilder::default()
+    /// )?.assert_no_start();
     ///
     /// # Ok(())
     /// # }
@@ -615,15 +616,14 @@ impl ModuleInstance {
     /// # let module = metered_wasmi::Module::from_buffer(&wasm_binary).expect("failed to load wasm");
     /// # let instance = ModuleInstance::new(
     /// # &module,
-    /// # &ImportsBuilder::default(),
+    /// # &ImportsBuilder::default()
     /// # ).expect("failed to instantiate wasm module").assert_no_start();
     /// assert_eq!(
     ///     instance.invoke_export(
     ///         "add",
     ///         &[RuntimeValue::I32(5), RuntimeValue::I32(3)],
     ///         &mut NopExternals,
-    ///     )
-    ///     .expect("failed to execute export"),
+    ///     ).expect("failed to execute export"),
     ///     Some(RuntimeValue::I32(8)),
     /// );
     /// # }
@@ -634,13 +634,9 @@ impl ModuleInstance {
         args: &[RuntimeValue],
         externals: &mut E,
     ) -> Result<Option<RuntimeValue>, Error> {
-        let func_instance = match self.func_by_name(func_name) {
-            Ok(func_instance) => func_instance,
-            Err(e) => return Err(e.into()),
-        };
+        let func_instance = self.func_by_name(func_name)?;
 
-        let result = FuncInstance::invoke(&func_instance, args, externals);
-        result.map_err(|t| Error::Trap(t))
+        FuncInstance::invoke(&func_instance, args, externals).map_err(|t| Error::Trap(t))
     }
 
     /// Invoke exported function by a name using recycled stacks.
@@ -733,10 +729,7 @@ impl<'a> NotStartedModuleRef<'a> {
                 .instance
                 .func_by_index(start_fn_idx)
                 .expect("Due to validation start function should exists");
-            match FuncInstance::invoke(&start_func, &[], state) {
-                Err(e) => return Err(e.into()),
-                result => result,
-            }.unwrap();
+            FuncInstance::invoke(&start_func, &[], state)?;
         }
         Ok(self.instance)
     }
@@ -827,17 +820,6 @@ mod tests {
     use imports::ImportsBuilder;
     use tests::parse_wat;
     use types::{Signature, ValueType};
-    use value::RuntimeValue;
-    use func::FuncRef;
-    use imports::ModuleImportResolver;
-    use host::RuntimeArgs;
-    use host::Externals;
-
-    use isa;
-    use Error;
-    use Trap;
-    use TrapKind;
-
 
     #[should_panic]
     #[test]
@@ -854,88 +836,6 @@ mod tests {
         module.assert_no_start();
     }
 
-    #[test]
-    fn invoke_export() {
-        extern crate wabt;
-        const FUNC_INDEX: usize = 0;
-
-        pub struct EnvModuleResolver;
-
-        pub struct EnvExternals;
-        impl Externals for EnvExternals {
-            fn invoke_index(
-                &mut self,
-                index: usize,
-                _args: RuntimeArgs,
-            ) -> Result<Option<RuntimeValue>, Trap> {
-                match index {
-                    FUNC_INDEX => Ok(Some(RuntimeValue::I32(1))),
-                    _ => panic!("invalid func_index"),
-                }
-            }
-
-            fn use_gas(
-                &mut self,
-                _instruction: &isa::Instruction
-                ) -> Result<(), TrapKind> { Ok(())}
-        }
-
-        impl<'a> ModuleImportResolver for EnvModuleResolver {
-            fn resolve_func(
-                &self,
-                field_name: &str,
-                _signature: &Signature,
-            ) -> Result<FuncRef, Error> {
-                let func_ref = match field_name {
-                    "func" => {
-                        FuncInstance::alloc_host(
-                            Signature::new(&[][..] ,Some(ValueType::I32)),
-                            FUNC_INDEX,
-                        )
-                    },
-                    _ => {
-                    return Err(Error::Function(format!(
-                      "host module doesn't export function with name {}",
-                      field_name
-                    )));
-                    }
-                };
-                Ok(func_ref)
-            }
-        }
-
-        let wasm_binary: Vec<u8> = wabt::wat2wasm(
-        r#"
-        (module
-            (type $FUNCSIG$i (func (result i32)))
-            (import "env" "func" (func $readMemory (result i32)))
-            (table 0 anyfunc)
-            (memory $0 1)
-            (export "memory" (memory $0))
-            (export "main" (func $main))
-            (func $main (; 1 ;) (result i32)
-            (call $readMemory)
-            )
-        )
-
-        "#,
-        ).expect("failed to parse wat");
-        let module = super::Module::from_buffer(&wasm_binary).expect("failed to load wasm");
-        let instance = ModuleInstance::new(
-        &module,
-        &ImportsBuilder::new()
-        .with_resolver("env", &EnvModuleResolver),
-        ).expect("failed to instantiate wasm module").assert_no_start();
-        assert_eq!(
-            instance.invoke_export(
-                "main",
-                &[],
-                &mut EnvExternals,
-            )
-            .expect("failed to execute export"),
-            Some(RuntimeValue::I32(1)),
-        );
-    }
     #[test]
     fn imports_provided_by_externvals() {
         let module_with_single_import = parse_wat(
@@ -968,7 +868,7 @@ mod tests {
         .is_err());
 
         // externval vector is shorter than import count.
-        assert!(ModuleInstance::with_externvals(&module_with_single_import, [].iter()).is_err());
+        assert!(ModuleInstance::with_externvals(&module_with_single_import, [].iter(),).is_err());
 
         // externval vector has an unexpected type.
         assert!(ModuleInstance::with_externvals(
